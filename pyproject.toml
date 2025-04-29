@@ -1,0 +1,23 @@
+[project]
+name = "trajectoryplotting"
+version = "0.1.0"
+description = "Package for extracting and modifying expected trajectories for a frame"
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "0 (>=0.0.0,<0.0.1)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "shapely (>=2.1.0,<3.0.0)",
+    "opencv-python (>=4.11.0.86,<5.0.0.0)",
+    "numpy (>=2.2.5,<3.0.0)",
+    "scipy (>=1.15.2,<2.0.0)",
+    "matplotlib (>=3.10.1,<4.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

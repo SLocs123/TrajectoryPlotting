@@ -8,13 +8,13 @@ from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import math
-from transform_label_json import transform_labelstudio_input, x_to_bbox, bbox_to_z
+from utils.transform_label_json import transform_labelstudio_input, x_to_bbox, bbox_to_z
 import time
 import pickle
 import os
 
 # Assuming label_json is already created
-label_json = transform_labelstudio_input('label_studio_CAM-HAZELDELL-126THST.json', 0)
+# label_json = transform_labelstudio_input('label_studio_CAM-HAZELDELL-126THST.json', 0)
 
 # Function to get true labels
 def get_true_labels(label, frame_num):
@@ -122,40 +122,8 @@ def save_frame(video_path, output_path, polygons_csv, expected_trajectories, coo
     Raises:
         ValueError: If the input file format is not supported (neither video nor image).
     """
-
-    # Detect file extension
-    _, ext = os.path.splitext(video_path)
-    ext = ext.lower()
-
-    # Supported video file extensions
-    video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
-    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
-
-    if ext in video_extensions:
-        # Process as a video
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            print("Error: Could not open video file.")
-            return
-
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-        ret, frame = cap.read()
-        cap.release()
-
-        if not ret:
-            print(f"Error: Could not read frame {frame_num} from video.")
-            return
-
-    elif ext in image_extensions:
-        # Process as an image
-        frame = cv2.imread(video_path)
-        if frame is None:
-            print("Error: Could not open image file.")
-            return
-
-    else:
-        # Raise error for unsupported format
-        raise ValueError(f"Unsupported file format: {ext}. Supported formats are: {video_extensions + image_extensions}")
+    # Read the frame/image from the specified path (if video, extract the frame_num)
+    frame = read_image_from_path(video_path)
 
     # Now process the frame/image with polygons, labels, and trajectories
     polygons = read_polygons_from_csv(polygons_csv)
@@ -479,16 +447,107 @@ def show_structure(d, indent=0):
         print(' ' * indent + f'{key} ({type(value).__name__})')
         if isinstance(value, dict):
             show_structure(value, indent + 2)
+         
+            
+def read_image_from_path(input_path):
+    # Detect file extension
+    _, ext = os.path.splitext(input_path)
+    ext = ext.lower()
+
+    # Supported video file extensions
+    video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
+    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+
+    if ext in video_extensions:
+        # Process as a video
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            print("Error: Could not open video file.")
+            return
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 1)
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret:
+            print(f"Error: Could not read frame {1} from video.")
+            return
+
+    elif ext in image_extensions:
+        # Process as an image
+        frame = cv2.imread(input_path)
+        if frame is None:
+            print("Error: Could not open image file.")
+            return
+
+    else:
+        # Raise error for unsupported format
+        raise ValueError(f"Unsupported file format: {ext}. Supported formats are: {video_extensions + image_extensions}")
+
+    return frame
+
+
+def get_all_points(trajectories):
+    all_points = []
+    for points in trajectories.values():  # Iterate over the values (lists of points)
+        all_points.extend(points)
+    return np.array(all_points)
+
+def draw_all_points(image, all_points):
+    for point in all_points:
+        x, y = point[0][0], point[0][1]
+        # Draw a circle on the image
+        # Parameters:
+        # - image: The image on which to draw the circle (numpy array)
+        # - (int(x), int(y)): The center of the circle (tuple of integers)
+        # - 2: The radius of the circle (integer)
+        # - (255, 0, 0): The color of the circle in BGR format (tuple of integers)
+        # - -1: The thickness of the circle's border (-1 means filled circle) (integer)
+        cv2.circle(image, (int(x), int(y)), 2, (255, 0, 0), -1)
+    return image
+
+
+def click_event(event, x, y, polygons):
+    
+    if event == cv2.EVENT_LBUTTONDOWN:
+        point = Point(x, y)
+
+        if editing_polygon_index is not None:
+            new_coords.append((x, y))
+            if len(new_coords) >= 3:
+                # Replace the polygon in the list
+                polygons[editing_polygon_index] = Polygon(new_coords)
+                print(f"Polygon {editing_polygon_index} updated.")
+                editing_polygon_index = None
+                new_coords = []
+        else:
+            for idx, poly in enumerate(polygons):
+                if poly.contains(point):
+                    print(f"Polygon {idx} clicked! Start redefining it.")
+                    editing_polygon_index = idx
+                    new_coords = []
+                    break
+
+
+def redraw_poly(polygons_csv, video_path, vehicle_traj):
+    image = read_image_from_path(video_path)
+    polygons = read_polygons_from_csv(polygons_csv)
+    Every_Point = get_all_points(vehicle_traj)
+    draw_all_points(image, Every_Point)
+    draw_polygons(image, polygons)
 
 # Example usage
-video_path = 'cam04.jpg'
+video_path = 'assets/cam04.jpg'
 frame_num = 1
 output_path = 'test.jpg'
-polygons_csv = 'cam04_poly.csv'
-SCT_label = 'cam04_SCT.txt'
+polygons_csv = 'assets/cam04_poly.csv'
+SCT_label = 'assets/cam04_SCT.txt'
 
+start = time.time()
 expected_trajectories = create_expected_trajectories(read_polygons_from_csv(polygons_csv), SCT_label)
 # show_structure(expected_trajectories)
+end = time.time()
+print(f'Expected trajectories created in {end - start:.2f} seconds.')
 
 save_frame(video_path, output_path, polygons_csv, expected_trajectories)
 

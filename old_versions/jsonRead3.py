@@ -7,7 +7,7 @@ from scipy.interpolate import interp1d, UnivariateSpline
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import math
-from transform_label_json import transform_labelstudio_input, x_to_bbox, bbox_to_z
+from utils.transform_label_json import transform_labelstudio_input, x_to_bbox, bbox_to_z
 import time
 import pickle
 

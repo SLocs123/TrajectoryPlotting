@@ -1,4 +1,4 @@
-from transform_label_json import transform_labelstudio_input, x_to_bbox, bbox_to_z
+from utils.transform_label_json import transform_labelstudio_input, x_to_bbox, bbox_to_z
 import cv2
 
 cap = cv2.VideoCapture('CAM-HAZELDELL-126THST.mp4')

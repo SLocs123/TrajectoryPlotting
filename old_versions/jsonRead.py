@@ -1,4 +1,4 @@
-from transform_label_json import transform_labelstudio_input
+from utils.transform_label_json import transform_labelstudio_input
 import pandas as pd
 from shapely.geometry import Polygon, Point
 import ast

@@ -61,7 +61,7 @@ def draw_polygons(frame, polygons):
         # Label the centroid position
         cv2.putText(frame, label, label_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, cv2.LINE_AA)
         
-def draw_trajectories(frame, expected_trajectories, coords=False):
+def draw_trajectories(frame, expected_trajectories, coords=False, seperate_trajectories=False, sep_dir='output/trajs'):
     """
     Draws trajectories on the frame, and labels each trajectory with an index.
     
@@ -90,48 +90,63 @@ def draw_trajectories(frame, expected_trajectories, coords=False):
     ]
     color_index = 0
 
-    for out_index, (first_polygon_int, inner_dict) in enumerate(expected_trajectories.items()):
-        color_index = (color_index + 1) % len(label_colors)
-        color = label_colors[color_index]
-
-        for in_index, (final_polygon, trajectory) in enumerate(inner_dict.items()):
-            trajectory = trajectory[:, 0]
-            # Draw the trajectory points
-            for point in trajectory:
-                cv2.circle(frame, (int(point[0]), int(point[1])), 2, color, -1)
-            # Draw lines between consecutive points
-            for i in range(len(trajectory) - 1):
-                cv2.line(frame, (int(trajectory[i][0]), int(trajectory[i][1])), (int(trajectory[i+1][0]), int(trajectory[i+1][1])), color, 1)
-            
-            # Draw the label for the trajectory
-            x, y = trajectory[0][0], trajectory[0][1]
-            label_text = f"Index: 1st: {out_index}, 2nd: {in_index}"
-            label_position = (int(x), int(y))
-            font_scale = 1.0
-            font_color = (255, 255, 255)
-            thickness = 2
-            line_type = cv2.LINE_AA
-            (text_width, text_height), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-            
-            # Compute background for text
-            background_left = label_position[0]
-            background_top = label_position[1] - text_height - baseline
-            background_right = label_position[0] + text_width
-            background_bottom = label_position[1]
-            # cv2.rectangle(frame, (int(background_left), int(background_top)), (int(background_right), int(background_bottom)), (0, 0, 255), cv2.FILLED)
-            
-            # Draw the text label
-            cv2.putText(frame, label_text, label_position, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_color, thickness, line_type)
-            
-            # Show coordinates if 'coords' is 'on'
-            if coords:
+    if seperate_trajectories:
+        for out_index, (first_polygon_int, inner_dict) in enumerate(expected_trajectories.items()):
+            color_index = (color_index + 1) % len(label_colors)
+            color = label_colors[color_index]
+            for in_index, (final_polygon, trajectory) in enumerate(inner_dict.items()):
+                img = frame.copy()
+                trajectory = trajectory[:, 0]
+                # Draw the trajectory points
                 for point in trajectory:
-                    coord_text = f"({int(point[0])}, {int(point[1])})"
-                    coord_position = (int(point[0]), int(point[1]) - 10)  # Place the label just above the point
-                    cv2.putText(frame, coord_text, coord_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+                    cv2.circle(img, (int(point[0]), int(point[1])), 2, color, -1)
+                # Draw lines between consecutive points
+                for i in range(len(trajectory) - 1):
+                    cv2.line(img, (int(trajectory[i][0]), int(trajectory[i][1])), (int(trajectory[i+1][0]), int(trajectory[i+1][1])), color, 1)
+                cv2.imwrite(f"{sep_dir}/trajectory_{out_index}_{in_index}.jpg", img)
+    else:
+        for out_index, (first_polygon_int, inner_dict) in enumerate(expected_trajectories.items()):
+            color_index = (color_index + 1) % len(label_colors)
+            color = label_colors[color_index]
+
+            for in_index, (final_polygon, trajectory) in enumerate(inner_dict.items()):
+                trajectory = trajectory[:, 0]
+                # Draw the trajectory points
+                for point in trajectory:
+                    cv2.circle(frame, (int(point[0]), int(point[1])), 2, color, -1)
+                # Draw lines between consecutive points
+                for i in range(len(trajectory) - 1):
+                    cv2.line(frame, (int(trajectory[i][0]), int(trajectory[i][1])), (int(trajectory[i+1][0]), int(trajectory[i+1][1])), color, 1)
+                
+                # Draw the label for the trajectory
+                x, y = trajectory[0][0], trajectory[0][1]
+                label_text = f"Index: 1st: {out_index}, 2nd: {in_index}"
+                label_position = (int(x), int(y))
+                font_scale = 1.0
+                font_color = (255, 255, 255)
+                thickness = 2
+                line_type = cv2.LINE_AA
+                (text_width, text_height), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+                
+                # Compute background for text
+                background_left = label_position[0]
+                background_top = label_position[1] - text_height - baseline
+                background_right = label_position[0] + text_width
+                background_bottom = label_position[1]
+                # cv2.rectangle(frame, (int(background_left), int(background_top)), (int(background_right), int(background_bottom)), (0, 0, 255), cv2.FILLED)
+                
+                # Draw the text label
+                cv2.putText(frame, label_text, label_position, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_color, thickness, line_type)
+                
+                # Show coordinates if 'coords' is 'on'
+                if coords:
+                    for point in trajectory:
+                        coord_text = f"({int(point[0])}, {int(point[1])})"
+                        coord_position = (int(point[0]), int(point[1]) - 10)  # Place the label just above the point
+                        cv2.putText(frame, coord_text, coord_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
                     
 # Function to save a frame with annotations
-def save_frame(video_path, output_path, polygons_csv, expected_trajectories, coords='off', frame_num=1):
+def save_frame(video_path, output_path, polygons_csv, expected_trajectories, coords=False, frame_num=1):
     """
     Saves a frame from a video or an image file, overlaying it with bounding boxes, polygons, 
     and trajectories as specified.
@@ -156,7 +171,7 @@ def save_frame(video_path, output_path, polygons_csv, expected_trajectories, coo
     
     # draw_bounding_boxes(frame, labels)
     draw_polygons(frame, polygons)
-    draw_trajectories(frame, expected_trajectories, coords=coords)
+    draw_trajectories(frame, expected_trajectories, coords=coords, seperate_trajectories=True)
 
     # Save the processed frame/image
     cv2.imwrite(output_path, frame)

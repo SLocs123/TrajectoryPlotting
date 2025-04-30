@@ -1,4 +1,4 @@
-from utils.io_utils import read_polygons_from_csv
+from utils.io_utils import read_polygons_from_csv, save_trajs
 from utils.trajectory_analysis import create_expected_trajectories
 from utils.drawing_utils import save_frame
 from utils.polygon_utils import redraw_poly
@@ -8,7 +8,7 @@ print("Imports completed.")
 video_path = 'assets/cam04.jpg'
 output_path = 'output/test.jpg'
 polygons_csv = 'assets/cam04_poly_new.csv'
-SCT_label = 'assets/cam04_SCT.txt'
+SCT_label = 'assets/cam04_SCT_no108.txt'
 
 print('Reading polygons from CSV...')
 
@@ -27,3 +27,7 @@ end = time.time()
 print(f'Expected trajectories created in {end - start:.2f} seconds.')
 print('Saving frame...')
 save_frame(video_path, output_path, polygons_csv, expected_trajectories)
+
+save_flag = input("Do you want to save the expected trajectories? (y/n): ").strip().lower()
+if save_flag in yes:
+    save_trajs(expected_trajectories, polygons)

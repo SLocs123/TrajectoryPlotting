@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from shapely.geometry import Point, Polygon
+import shapely
 from .io_utils import read_labels_from_txt, get_true_labels
 from .utils import add_item, get_next_element, is_within
 from .trajectory_utils import interpolate_trajectory, resample_trajectory, rotate_rectangle
@@ -20,12 +21,20 @@ def find_linked_polygons(polys, trajs):
         
         start_poly = detections[0]
         end_poly = detections[-1]
+        
+        reference_poly = Polygon([(824, 526), (826, 609), (879, 606), (876, 516)])
+        refernece_end = Polygon([(2334, 495), (2527, 503), (2541, 546), (2331, 531), (2334, 495)])
+        if shapely.equals(reference_poly, start_poly) and shapely.equals(refernece_end, end_poly):
+            print(f'error id: {id}')
+
+            
         if start_poly != end_poly:
             if start_poly not in linked_polys:
                 linked_polys[start_poly] = {}
             if end_poly not in linked_polys[start_poly]:
                 linked_polys[start_poly][end_poly] = []
             linked_polys[start_poly][end_poly].append(items)
+
     
     return linked_polys
 
@@ -171,6 +180,7 @@ def create_expected_trajectories(polygons, filepath):
     traj_dict = {}
     vehicle_trajectories = create_vehicle_trajectories(filepath)
     linked_polygons = find_linked_polygons(polygons, vehicle_trajectories)
+    
 
     for poly1, inner_dict in linked_polygons.items():
         for poly2, items_list in inner_dict.items():

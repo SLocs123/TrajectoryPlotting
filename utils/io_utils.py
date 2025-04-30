@@ -3,6 +3,7 @@ import ast
 from shapely.geometry import Polygon
 import cv2
 import os
+import pickle
 
 def get_true_labels(label_data, frame_number, scale_x=38.4, scale_y=21.6):
     """
@@ -164,3 +165,30 @@ def read_image_from_path(input_path):
         raise ValueError(f"Unsupported file format: {ext}. Supported formats are: {video_extensions + image_extensions}")
     
     return frame
+
+def save_trajs(expected_trajectories, polygons, dir=None):
+    """
+    Saves the expected trajectories to a pkl file.
+    
+    Args:
+        expected_trajectories (dict): The expected trajectories to be saved.
+        polygons (list): The list of polygons associated with the trajectories.
+    """
+    # Create a DataFrame from the expected trajectories
+    try:
+        if dir is not None:
+            os.makedirs(dir, exist_ok=True)
+        else:
+            dir = input("Enter the directory to save the file: ").strip()
+            os.makedirs(dir, exist_ok=True)
+    except Exception as e:
+        raise ValueError(f"Error trying to save, check dir: {e}")
+        
+    if not dir.endswith('/'):
+        dir += '/'
+    name = input("Enter the name of the expected trajectories file: ").strip()
+    if name.endswith('.pkl'):
+        name = name[:-4]
+    expected_trajectories['polygons'] = polygons
+    with open(f'{dir}{name}.pkl', 'wb') as pkl_file:
+        pickle.dump(expected_trajectories, pkl_file)

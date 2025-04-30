@@ -47,12 +47,15 @@ def draw_polygons(frame, polygons):
     Returns:
     - None: The function modifies the input frame in-place.
     """
-    for polygon in polygons:
+    for ind, polygon in enumerate(polygons):
         # Convert polygon points to the required format for OpenCV
         points = np.array([list(coord) for coord in polygon.exterior.coords], np.int32).reshape((-1, 1, 2))
         # Draw the polygon on the frame
-        cv2.polylines(frame, [points], isClosed=True, color=(0, 255, 0), thickness=2)
-        
+        if ind == 7:
+            cv2.polylines(frame, [points], isClosed=True, color=(0, 255, 255), thickness=2)
+        else:
+            cv2.polylines(frame, [points], isClosed=True, color=(0, 0, 255), thickness=2)
+            
         # Get the centroid of the polygon
         centroid = polygon.centroid
         label = f"({centroid.x:.1f}, {centroid.y:.1f})"
@@ -104,6 +107,8 @@ def draw_trajectories(frame, expected_trajectories, coords=False, seperate_traje
                 for i in range(len(trajectory) - 1):
                     cv2.line(img, (int(trajectory[i][0]), int(trajectory[i][1])), (int(trajectory[i+1][0]), int(trajectory[i+1][1])), color, 1)
                 cv2.imwrite(f"{sep_dir}/trajectory_{out_index}_{in_index}.jpg", img)
+                if out_index == 7 and in_index == 0:
+                    print(first_polygon_int, final_polygon)
     else:
         for out_index, (first_polygon_int, inner_dict) in enumerate(expected_trajectories.items()):
             color_index = (color_index + 1) % len(label_colors)
@@ -171,7 +176,7 @@ def save_frame(video_path, output_path, polygons_csv, expected_trajectories, coo
     
     # draw_bounding_boxes(frame, labels)
     draw_polygons(frame, polygons)
-    draw_trajectories(frame, expected_trajectories, coords=coords, seperate_trajectories=True)
+    draw_trajectories(frame, expected_trajectories, coords=coords)
 
     # Save the processed frame/image
     cv2.imwrite(output_path, frame)

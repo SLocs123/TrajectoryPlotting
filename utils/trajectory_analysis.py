@@ -1,12 +1,16 @@
 import os
 import numpy as np
+import csv
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from shapely.geometry import Point, Polygon
 import shapely
+from fastdtw import fastdtw
+from scipy.spatial.distance import euclidean
+from .trajectory_utils import get_mode_list_by_length_kde
 from .io_utils import read_labels_from_txt, get_true_labels
 from .utils import add_item, get_next_element, is_within
-from .trajectory_utils import interpolate_trajectory, resample_trajectory, rotate_rectangle
+from .trajectory_utils import interpolate_trajectory, resample_trajectory, rotate_rectangle, smooth_trajectory, smooth_density_resample
 from .transform_label_json import transform_labelstudio_input, bbox_to_z
 
 
@@ -118,6 +122,60 @@ def average_similar_points(items_list, poly1, poly2, width, show=True):
 
     return inted_trajectory
 
+def average_DTW(items_list):
+    all_points = []
+    for item in items_list:
+        all_points.extend(item)
+    all_points = np.array(all_points)
+    
+    aligned_trajectories = align_trajectories(items_list)
+    averaged_trajectory = average_trajectories(aligned_trajectories)
+    return averaged_trajectory
+    
+def align_trajectories(trajectories):
+    """
+    Aligns multiple trajectories using DTW. The first trajectory in the list
+    will be used as the reference trajectory, and the rest will be aligned to it.
+    """
+    # Initialize a list to store aligned trajectories
+    aligned_trajectories = []
+
+    # Use the first trajectory as the reference
+    reference_trajectory = get_mode_list_by_length_kde(trajectories, return_list=True)
+    ref_xy = [point[0] for point in reference_trajectory]
+    ref_len = len(ref_xy)
+
+    for traj in trajectories:
+        traj_xy = [point[0] for point in traj]
+        distance, path = fastdtw(ref_xy, traj_xy, dist=euclidean)
+
+        aligned_traj = [None] * ref_len  # initialise with None or NaNs
+
+        for ref_idx, traj_idx in path:
+            aligned_traj[ref_idx] = traj[traj_idx]  # Copy full data point (x, y, meta...)
+
+        # Replace any unfilled entries with NaNs
+        for i in range(ref_len):
+            if aligned_traj[i] is None:
+                aligned_traj[i] = np.full_like(reference_trajectory[0], np.nan)
+
+        aligned_trajectories.append(np.array(aligned_traj))
+    return aligned_trajectories
+
+
+def average_trajectories(aligned_trajectories):
+    """
+    Averages the aligned trajectories point-by-point.
+    Assumes all trajectories have been aligned to the same length.
+    """
+    # Stack the aligned trajectories and calculate the mean along the axis 0 (point-wise average)
+    stacked_trajectories = np.stack(aligned_trajectories)
+    averaged_trajectory = np.nanmean(stacked_trajectories, axis=0)
+    
+    avg_traj_inted = smooth_density_resample(averaged_trajectory)
+
+    return avg_traj_inted  
+
 def create_vehicle_trajectories(label_file_path):
     """
     Creates vehicle trajectories from a label file, either in `.txt` or `.json` format, by parsing the bounding box data
@@ -176,14 +234,19 @@ def create_vehicle_trajectories(label_file_path):
     return vehicle_trajectories
 
 # Function to create expected trajectories dictionary
-def create_expected_trajectories(polygons, filepath):
+def create_expected_trajectories(polygons, filepath, DTW=False):
     traj_dict = {}
     vehicle_trajectories = create_vehicle_trajectories(filepath)
     linked_polygons = find_linked_polygons(polygons, vehicle_trajectories)
     
-
+    count = 0
     for poly1, inner_dict in linked_polygons.items():
+        print(f'Running average: {count}', end='\r')
         for poly2, items_list in inner_dict.items():
-            averaged_traj = average_similar_points(items_list, poly1, poly2, 150, show=False)
+            if DTW:
+                averaged_traj = average_DTW(items_list)
+            else:
+                averaged_traj = average_similar_points(items_list, poly1, poly2, 150, show=False)
             final_trajs = add_item(traj_dict, poly1, poly2, averaged_traj)
+        count += 1
     return final_trajs

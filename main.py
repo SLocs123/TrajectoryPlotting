@@ -13,14 +13,14 @@ SCT_label = 'assets/cam04_SCT_no108.txt'
 print('Reading polygons from CSV...')
 
 
-# flag = input("Do you want to adjust polygons? (y/n): ").strip().lower()
-# yes = ['yes', 'y']
-# if flag in yes:
-#     polygons = redraw_poly(polygons_csv, video_path, SCT_label)
-# else:
-#     polygons = read_polygons_from_csv(polygons_csv)
+flag = input("Do you want to adjust polygons? (y/n): ").strip().lower()
+yes = ['yes', 'y']
+if flag in yes:
+    polygons = redraw_poly(polygons_csv, video_path, SCT_label)
+else:
+    polygons = read_polygons_from_csv(polygons_csv)
 
-polygons = read_polygons_from_csv(polygons_csv)
+# polygons = read_polygons_from_csv(polygons_csv)
 
 start = time.time()
 print('creating expected trajectories...')
@@ -30,6 +30,6 @@ print(f'Expected trajectories created in {end - start:.2f} seconds.')
 print('Saving frame...')
 save_frame(video_path, output_path, polygons_csv, expected_trajectories)
 
-# save_flag = input("Do you want to save the expected trajectories? (y/n): ").strip().lower()
-# if save_flag in yes:
-#     save_trajs(expected_trajectories, polygons)
+save_flag = input("Do you want to save the expected trajectories? (y/n): ").strip().lower()
+if save_flag in yes:
+    save_trajs(expected_trajectories, polygons)

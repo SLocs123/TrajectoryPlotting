@@ -5,10 +5,10 @@ from utils.polygon_utils import redraw_poly
 import time
 
 print("Imports completed.")
-video_path = 'assets/cam04.jpg'
+video_path = 'assets/cam02.jpg'
 output_path = 'output/test.jpg'
-polygons_csv = 'assets/cam04_poly_new.csv'
-SCT_label = 'assets/cam04_SCT_no108.txt'
+polygons_csv = 'assets/cam02_poly.csv'
+SCT_label = 'assets/cam02_SCT.txt'
 
 print('Reading polygons from CSV...')
 
@@ -16,7 +16,7 @@ print('Reading polygons from CSV...')
 flag = input("Do you want to adjust polygons? (y/n): ").strip().lower()
 yes = ['yes', 'y']
 if flag in yes:
-    polygons = redraw_poly(polygons_csv, video_path, SCT_label)
+    polygons, polygons_csv = redraw_poly(polygons_csv, video_path, SCT_label) 
 else:
     polygons = read_polygons_from_csv(polygons_csv)
 

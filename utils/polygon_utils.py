@@ -21,16 +21,16 @@ def redraw_poly(polygons_csv, video_path, label_path):
 
     # Get screen resolution and compute initial zoom
     screen_res = (1280, 720)  # fallback
-    try:
-        cv2.namedWindow("_temp", cv2.WINDOW_NORMAL)
-        cv2.setWindowProperty("_temp", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-        dummy = np.zeros((100, 100, 3), dtype=np.uint8)
-        cv2.imshow("_temp", dummy)
-        cv2.waitKey(1)
-        screen_res = cv2.getWindowImageRect("_temp")[2:]
-        cv2.destroyWindow("_temp")
-    except:
-        pass
+    # try:
+    #     cv2.namedWindow("_temp", cv2.WINDOW_NORMAL)
+    #     cv2.setWindowProperty("_temp", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    #     dummy = np.zeros((100, 100, 3), dtype=np.uint8)
+    #     cv2.imshow("_temp", dummy)
+    #     cv2.waitKey(1)
+    #     screen_res = cv2.getWindowImageRect("_temp")[2:]
+    #     cv2.destroyWindow("_temp")
+    # except:
+    #     pass
 
     screen_width, screen_height = screen_res
     img_height, img_width = image.shape[:2]
@@ -126,4 +126,4 @@ def redraw_poly(polygons_csv, video_path, label_path):
             cv2.imshow("Shapely Polygon Editor", backup_image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-    return polygons
+    return polygons, polygons_csv

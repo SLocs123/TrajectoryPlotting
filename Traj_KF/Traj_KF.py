@@ -20,7 +20,6 @@ class Trajectory_Filter():
             trajectories (NoneType): Placeholder for trajectory information.
             sr (NoneType): Placeholder for spatial reference or related data.
         """
-        self.traj = None
         self.polygon_set = read_pkl(traj_dir)
         self.polygons = self.polygon_set.pop('polygons')
         self.assigned = None
@@ -37,7 +36,7 @@ class Trajectory_Filter():
         else:
             raise ValueError("Invalid Kalman filter domain. Choose 'traj' or 'image'.")
         
-    def update_xy(self, xy):
+    def update_xy(self, xy, ah):
         """
         Update the states of the trajectory tracker, assign and correct tracks and create necassary maps
         """
@@ -59,12 +58,12 @@ class Trajectory_Filter():
             pos = traj_to_img_domain(xy, map)
             positions.append(pos)
 
-        self.update_kf()
+        self.update_kf(pos, ah) # need to handle this correctly, multiple pos values
     
 
     def update_kf(self, traj_meas, box_meas):
         """
-        Update the given kalman filter with the provided position, mean, and covariance.
+        Update the dual kalman filter with the provided measurements.
 
         Args:
             position (tuple): xy coordinates in image domain.
@@ -77,7 +76,9 @@ class Trajectory_Filter():
         self.kf.update(traj_meas, box_meas)
         self.kf.predict()
         
-        measurements = self.kf.get_state()
+        measurements = self.kf.get_state() # this will not work with multiple kf's
         xy = traj_to_img_domain(measurements['trajectory'][0][:1], self.map)
         ah = measurements['box'][0][:1]
+        
+        # select the value with the lowest lateral displacement!!!
         return xy.extend(ah)

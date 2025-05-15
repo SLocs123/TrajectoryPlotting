@@ -44,7 +44,7 @@ class Trajectory_Filter():
             self.assigned = is_within(xy, self.polygons)
                     
             if not self.assigned:
-                return (xy[0] + kf_dx, xy[1] + kf_dy), False # need to find a way to predict motion before traj assignment, likely need aditional kf until assigned
+                return (xy[0], xy[1]), False # need to find a way to predict motion before traj assignment, likely need aditional kf until assigned
             
             self.sr = []
             self.trajectories = []

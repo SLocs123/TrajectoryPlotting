@@ -1,19 +1,22 @@
 from .simple_kf import SimpleKalmanFilter
 
-class DualKalman:
-    def __init__(self):
+class MultiKalman:
+    def __init__(self, box_mean_cov=None):
         self.kf_traj_list = []  # List to hold trajectory Kalman filters
         self.kf_box = SimpleKalmanFilter(dim=2)  # Single Kalman filter for box in image domain
+        if box_mean_cov is not None:
+            self.box_mean, self.box_cov = box_mean_cov[0], box_mean_cov[1]
 
     def initiate(self, traj_measurements=None, box_measurement=None):
         # Initialize trajectory Kalman filters
         self.kf_traj_list = []
         self.traj_states = []
         if traj_measurements:
+            # kf_traj = SimpleKalmanFilter(dim=2) # THis should be fine for all trajectory kfs
             for traj_measurement in traj_measurements:
-                kf_traj = SimpleKalmanFilter(dim=2)
+                kf_traj = SimpleKalmanFilter(dim=2) # can remove this but need to check if it works as intended
                 traj_mean, traj_cov = kf_traj.initiate(traj_measurement)
-                self.kf_traj_list.append(kf_traj)
+                self.kf_traj_list.append(kf_traj) # shouldnt need this, should just need a list of mean and cov
                 self.traj_states.append((traj_mean, traj_cov))
         else:
             # Default to a single trajectory Kalman filter
@@ -23,7 +26,9 @@ class DualKalman:
             self.traj_states.append((traj_mean, traj_cov))
 
         # Initialize box Kalman filter
-        self.box_mean, self.box_cov = self.kf_box.initiate(box_measurement)
+        if self.box_mean is None:
+            self.box_mean, self.box_cov = self.kf_box.initiate(box_measurement)
+        
 
     def predict(self):
         # Predict for all trajectory Kalman filters

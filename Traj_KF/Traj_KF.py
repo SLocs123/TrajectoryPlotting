@@ -1,10 +1,11 @@
 from .Utils.dual_kf import DualKalman
+from .Utils.multi_kf import MultiKalman
 from .Utils.transformations import traj_to_img_domain, img_to_traj_domain, create_traj_map
 from .Utils.utils import read_pkl, is_within
 import numpy as np
 
 class Trajectory_Filter():
-    def __init__(self, traj_dir, KF_Domain='traj' ) -> None:
+    def __init__(self, traj_dir, position_xyah=[None, None], KF_Domain='traj' ) -> None:
         """
         Initializes the Traj_KF class.
 
@@ -23,62 +24,48 @@ class Trajectory_Filter():
         self.polygon_set = read_pkl(traj_dir)
         self.polygons = self.polygon_set.pop('polygons')
         self.assigned = None
-        self.trajectories = None
-        self.KF_count = 0
-        self.sr = None
-        self.maps = None
+        self.domain = KF_Domain
+        self.kf = DualKalman()
+        self.kf.initiate(position_xyah[0], position_xyah[1]) 
 
-        #  This will likely have to move to update function, since we need to assign the trajectory first
-        if KF_Domain == 'traj':
-            self.kf = DualKalman(KF_Domain)
-        elif KF_Domain == 'image':
-            self.kf = DualKalman(KF_Domain) # change to image domain kf version, currently just placeholder
-        else:
-            raise ValueError("Invalid Kalman filter domain. Choose 'traj' or 'image'.")
         
-    def update_xy(self, xy, ah):
+    def update_traj_xy(self, xy, ah):
         """
         Update the states of the trajectory tracker, assign and correct tracks and create necassary maps
         """
-        if not self.trajectories:
+
+        if not self.assigned:
             self.assigned = is_within(xy, self.polygons)
-                    
-            if not self.assigned:
-                return (xy[0], xy[1]), False # need to find a way to predict motion before traj assignment, likely need aditional kf until assigned
             
-            self.sr = []
-            self.trajectories = []
-            for internal_dict in self.polygon_set[self.assigned].values():
-                self.trajectories.append(np.array(internal_dict[:,0]))
-                self.sr.append(np.array(internal_dict[:,1]))
-            self.map = create_traj_map(self.trajectories)
+            if not self.assigned:
+                self.kf.update(xy, ah)
+                return self.kf.predict() # need to find a way to predict motion before traj assignment, likely need aditional kf until assigned
+            self.define_traj_sr_map()
+
+            self.kf.update(xy, ah)
+            xyah = self.kf.predict()
+            
+            dic = self.kf.get_state()
+            self.kf = MultiKalman(dic['box'])
+            self.kf.initiate(traj_measurements=[img_to_traj_domain(xy, map) for map in self.maps], box_measurement=ah)
+            return xyah
         
         positions = []
-        for map in self.maps:
-            pos = traj_to_img_domain(xy, map)
+        for map in self.maps: # type: ignore
+            pos = img_to_traj_domain(xy, map)
             positions.append(pos)
+        self.kf.update(positions, ah) # need to handle this correctly, multiple pos values
+        xyahs = self.kf.predict()
 
-        self.update_kf(pos, ah) # need to handle this correctly, multiple pos values
+        i, xyah = min(enumerate(xyahs), key=lambda item: item[1][0][1])
+        xy = traj_to_img_domain(xyah[0:2], self.maps[i])
+
+        return xy, xyah[2:4]
     
-
-    def update_kf(self, traj_meas, box_meas):
-        """
-        Update the dual kalman filter with the provided measurements.
-
-        Args:
-            position (tuple): xy coordinates in image domain.
-        """
-        
-        if self.KF_count == 0:
-            self.kf.initiate(traj_measurement=traj_meas, box_measurement=box_meas)
-            self.KF_count += 1
-        
-        self.kf.update(traj_meas, box_meas)
-        self.kf.predict()
-        
-        measurements = self.kf.get_state() # this will not work with multiple kf's
-        xy = traj_to_img_domain(measurements['trajectory'][0][:1], self.map)
-        ah = measurements['box'][0][:1]
-        
-        # select the value with the lowest lateral displacement!!!
-        return xy.extend(ah)
+    def define_traj_sr_map(self):
+        self.sr = []
+        self.trajectories = []
+        for internal_dict in self.polygon_set[self.assigned].values():
+            self.trajectories.append(np.array(internal_dict[:,0]))
+            self.sr.append(np.array(internal_dict[:,1]))
+        self.maps = create_traj_map(self.trajectories)

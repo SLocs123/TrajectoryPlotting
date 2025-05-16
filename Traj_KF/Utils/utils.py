@@ -1,7 +1,7 @@
 import pickle
 from shapely.geometry import Point
 
-def read_pkl(self, traj_dir):
+def read_pkl(traj_dir):
         with open(traj_dir, 'rb') as pkl_file:
             loaded_data = pickle.load(pkl_file) 
         polygon_set = loaded_data
@@ -23,3 +23,4 @@ def is_within(xy, polygons):
     for polygon in polygons:
         if polygon.contains(point):
             return polygon
+    return None

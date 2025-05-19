@@ -39,7 +39,7 @@ class Trajectory_Filter():
             
             if not self.assigned:
                 self.kf.update(xy, ah)
-                return self.kf.predict() # need to find a way to predict motion before traj assignment, likely need aditional kf until assigned
+                return self.kf.predict()
             self.define_traj_sr_map()
 
             self.kf.update(xy, ah)
@@ -51,10 +51,10 @@ class Trajectory_Filter():
             return xyah
         
         positions = []
-        for map in self.maps: # type: ignore
+        for map in self.maps: 
             pos = img_to_traj_domain(xy, map)
             positions.append(pos)
-        self.kf.update(positions, ah) # need to handle this correctly, multiple pos values
+        self.kf.update(positions, ah) 
         xyahs = self.kf.predict()
 
         i, xyah = min(enumerate(xyahs), key=lambda item: item[1][0][1])

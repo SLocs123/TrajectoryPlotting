@@ -34,3 +34,7 @@ This repository supports the QuickTrack method for trajectory-based tracking. It
 
 - Ensure all required dependencies are installed before running the scripts, poetry.lock is provided.
 - Refer to the code comments for additional details and troubleshooting.
+
+## Extra notes
+
+due to the necessity to save multiple means and covariances for multiple KFs (since there are 2 different domains), each track will need to save a track.means and tack.covs, you should then run track.mean = track.means[0] in order to get the best mean fit, as multi_kf will give a sorted return, and single kf wil return [[mean]]. This gives a consistent approach for the tracks

@@ -1,62 +1,109 @@
 from .simple_kf import SimpleKalmanFilter
+import numpy as np
+from Utils.transformations import img_to_traj_domain, traj_to_img_domain
 
 class MultiKalman:
-    def __init__(self, box_mean_cov=None):
-        self.kf_traj_list = []  # List to hold trajectory Kalman filters
-        self.kf_box = SimpleKalmanFilter(dim=2)  # Single Kalman filter for box in image domain
-        if box_mean_cov is not None:
-            self.box_mean, self.box_cov = box_mean_cov[0], box_mean_cov[1]
+    """
+    Manages multiple Kalman filters for tracking trajectories in a multi-dimensional space.
 
-    def initiate(self, traj_measurements=None, box_measurement=None):
-        # Initialize trajectory Kalman filters
-        self.kf_traj_list = []
-        self.traj_states = []
-        if traj_measurements:
-            # kf_traj = SimpleKalmanFilter(dim=2) # THis should be fine for all trajectory kfs
-            for traj_measurement in traj_measurements:
-                kf_traj = SimpleKalmanFilter(dim=2) # can remove this but need to check if it works as intended
-                traj_mean, traj_cov = kf_traj.initiate(traj_measurement)
-                self.kf_traj_list.append(kf_traj) # shouldnt need this, should just need a list of mean and cov
-                self.traj_states.append((traj_mean, traj_cov))
+    Attributes:
+        dim (int): Number of position dimensions (e.g., 2 for x, y or a, h).
+        dt (float): Time step for the motion model. This can be dynamically adjusted for better tracking in the future.
+        _motion_mat (np.ndarray): State transition matrix for the motion model.
+        _update_mat (np.ndarray): Observation matrix for the measurement model.
+        _std_weight_position (float): Standard deviation weight for position noise.
+        _std_weight_velocity (float): Standard deviation weight for velocity noise.
+        kf (SimpleKalmanFilter): Instance of a simple Kalman filter for state estimation.
+    """
+
+    def __init__(self, dim=2, std_pos=1. / 20, std_vel=1. / 160):
+        """
+        Initializes the MultiKalman object with the specified dimensions and noise parameters.
+
+        :param dim: Number of position dimensions (2 → x, y).
+        :type dim: int
+        :param std_pos: Standard deviation weight for position noise. affects the weight of measurments
+        :type std_pos: float
+        :param std_vel: Standard deviation weight for velocity noise. affects the weight of the motion model
+        :type std_vel: float
+        """
+        self.kf = SimpleKalmanFilter(dim, std_pos, std_vel)
+
+    def initiate(self, measurements=None, maps=None):
+        """
+        Initializes trajectory Kalman filters for a set of measurements and corresponding maps.
+        This function converts the provided measurements into the trajectory domain for each map,
+        then initializes a Kalman filter for each resulting point. The means and covariances of
+        the initialized filters are collected and returned.
+        Args:
+            measurements (optional): The measurement data to be used for initialization.
+            maps (optional): A list of map objects corresponding to each measurement.
+        Returns:
+            tuple: A tuple containing two lists:
+                - means: List of mean state vectors for each initialized Kalman filter.
+                - covariances: List of covariance matrices for each initialized Kalman filter.
+        Note:
+            If either `measurements` or `maps` is not provided, the function returns a warning.
+        """
+
+        means = []
+        covariances = []
+        if measurements and maps:
+            for map in maps:
+                point = img_to_traj_domain(measurements, map)
+                mean, cov = self.kf.initiate(point)
+                means.append(mean)
+                covariances.append(cov)
         else:
-            # Default to a single trajectory Kalman filter
-            kf_traj = SimpleKalmanFilter(dim=2)
-            traj_mean, traj_cov = kf_traj.initiate(None)
-            self.kf_traj_list.append(kf_traj)
-            self.traj_states.append((traj_mean, traj_cov))
+            raise ValueError("Measurements and maps must be provided for initialization. Multi_KF cannot be initialized without them due to the unknown number of possible trajectories.")
+            
+        return means, covariances
 
-        # Initialize box Kalman filter
-        if self.box_mean is None:
-            self.box_mean, self.box_cov = self.kf_box.initiate(box_measurement)
-        
+    def predict(self, means, covariances, maps):
+        """
+        Predicts the next state for multiple trajectories using the Kalman filter.
 
-    def predict(self):
-        # Predict for all trajectory Kalman filters
-        self.traj_states = [
-            kf_traj.predict(traj_mean, traj_cov)
-            for kf_traj, (traj_mean, traj_cov) in zip(self.kf_traj_list, self.traj_states)
-        ]
+        Args:
+            means (list or np.ndarray): List or array of mean state vectors for each trajectory.
+            covariances (list or np.ndarray): List or array of covariance matrices corresponding to each mean.
+            maps (list): List of map objects or transformation data for each trajectory.
 
-        # Predict for box Kalman filter
-        self.box_mean, self.box_cov = self.kf_box.predict(self.box_mean, self.box_cov)
+        Returns:
+            None
 
-        # Return predicted states
-        traj_means = [state[0] for state in self.traj_states]
-        return traj_means, self.box_mean
+        Description:
+            For each trajectory, this method applies the Kalman filter's predict step using the provided mean and covariance.
+            The predicted trajectory state is then transformed to the image domain using the corresponding map.
+        """
+        for i, mean in enumerate(means):
+            cov = covariances[i]
+            traj = self.kf.predict(mean, cov)
+            point = traj_to_img_domain(traj[0], maps[i])
 
-    def update(self, traj_measurements, box_measurement):
-        # Update all trajectory Kalman filters
-        self.traj_states = [
-            kf_traj.update(traj_mean, traj_cov, traj_measurement)
-            for kf_traj, (traj_mean, traj_cov), traj_measurement in zip(
-                self.kf_traj_list, self.traj_states, traj_measurements
-            )
-        ]
 
-        # Update box Kalman filter
-        self.box_mean, self.box_cov = self.kf_box.update(self.box_mean, self.box_cov, box_measurement)
+    def update(self, measurements):
+        """
+        Updates the trajectory Kalman filters with new measurements.
+        For each measurement in the input list, this method updates the corresponding
+        Kalman filter state (mean and covariance) using the filter's update method.
+        The updated means and covariances for all trajectories are returned as lists.
+        Args:
+            measurements (list or array-like): A list of measurement vectors, one for each trajectory.
+        Returns:
+            tuple: A tuple containing two lists:
+                - updated_means (list): The updated state means for each trajectory.
+                - updated_covariances (list): The updated state covariances for each trajectory.
+        """
+        updated_means = []
+        updated_covariances = []
+        for i, measurement in enumerate(measurements):
+            mean, cov = self.kf.update(self.traj_states[i][0], self.traj_states[i][1], measurement)
+            updated_means.append(mean)
+            updated_covariances.append(cov)
 
-    def get_state(self):
+        return updated_means, updated_covariances
+
+    def get_state(self): # will not work, needs to be adapted to the new structure
         # Get states for all trajectory Kalman filters
         traj_states = [
             {'mean': traj_mean, 'cov': traj_cov}

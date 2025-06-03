@@ -115,3 +115,4 @@ class MultiKalman:
             'trajectories': traj_states,
             'box': {'mean': self.box_mean, 'cov': self.box_cov}
         }
+    

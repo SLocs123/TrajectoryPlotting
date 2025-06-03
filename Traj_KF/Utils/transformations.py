@@ -27,7 +27,7 @@ def img_to_traj_domain(position, map):
     
     map_positions = np.array([p[0] for p in map])
     distances = np.linalg.norm(map_positions - position, axis=1)
-    nearest_indices = np.argsort(distances)[:2]
+    nearest_indices = np.argsort(distances)[:2].tolist()
     first_index, second_index = sorted(nearest_indices)
 
     # Get the cartesian points

@@ -32,16 +32,12 @@ class Trajectory_Filter():
         """
         Create track from unassociated measurement. initiate always in the image domain.
         This method initializes the Kalman filter state for a track based on its xywh coordinates.
-        """
-        xywh = track.xywh
-        xy = xywh[:2]
-        ah = xywh[2:4]
+        """        
+        self.kf_xy.initiate(track)
+        self.kf_box.initiate(track)
         
-        xymean, xycov = self.kf_xy.initiate(xy)
-        boxmean, boxcov = self.kf_box.initiate(ah)
-        
-        track.mean = self.combine_mean(xymean, boxmean)
-        track.cov = [xycov, boxcov]
+        track.mean = self.combine_mean(track.xymean, track.whmean)
+        # track.cov = [track.xycov, track.whcov]
         
     
     # def multi_initiate(self, track):
@@ -51,20 +47,19 @@ class Trajectory_Filter():
 
     def predict(self, track):
         """
-        Run Kalman filter prediction step. !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -------------------------------- need to check if track is assigned, handle different domains
+        Run Kalman filter prediction step. look into handling multi----might just pass the track to handle below!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -------------------------------- need to check if track is assigned, handle different domains
         """
-        meanxy, meanbox = self.split_mean(track.mean)
-        covxy, covbox = track.cov
+        
         if track.assigned:
-            maps = self.all_maps[track.assigned]
-            predicted_xy, predicted_covxy = self.kf_xy.predict(meanxy, covxy, maps)
-            predicted_box, predicted_covbox = self.kf_box.predict(meanbox, covbox, maps)
+            self.kf_xy.predict(track)
+            self.kf_box.predict(track)
         else:   
-            predicted_xy, predicted_covxy = self.kf_xy.predict(meanxy, covxy)
-            predicted_box, predicted_covbox = self.kf_box.predict(meanbox, covbox)
+            self.kf_xy.predict(track)
+            self.kf_box.predict(track)
+            
+        track.mean = self.combine_mean(track.xymean, track.whmean)
+        return track.mean, [track.xycov, track.whcov]
     
-        return self.combine_mean(predicted_xy, predicted_box)
-
     # def multi_predict(self, tracks):
     #     """
     #     Vectorized Kalman filter prediction for multiple tracks.
@@ -87,37 +82,34 @@ class Trajectory_Filter():
     #     combined_covs = np.array([[cx, cb] for cx, cb in zip(predicted_covxy, predicted_covbox)])
 
     #     return combined_means, combined_covs
-
-
         
     def update(self, track, xy, wh):
         """
         Update the states of the trajectory tracker, assign and correct tracks and create necassary maps
+        Might need to update xywh everytime, need to look at typicaly track syntax
         """
 
         if not track.assigned:
             track.assigned = is_within(xy, self.polygons)
-            meanxy, meanbox = self.split_mean(track.mean)
-            covxy, covbox = track.cov
-            updated_xy, updated_covxy = self.kf_xy.update(meanxy, covxy, xy)
-            updated_box, updated_covbox = self.kf_box.update(meanbox, covbox, wh)
             
-            if not track.assigned:
-                return self.combine_mean(updated_xy, updated_box), [updated_covxy, updated_covbox]
+            self.kf_xy.update(track, xy)
+            self.kf_box.update(track, wh)
+            
+            if track.assigned:
+                self.kf_xy = MultiKalman()
+                track.maps = self.all_maps[track.assigned]
+                track.xywh = [*xy, *wh]
+                self.kf_xy.initiate(track)
 
-            
-            dic = self.kf_xy.get_state()
-            self.kf_xy = MultiKalman()
-            
-            return self.combine_mean(updated_xy, updated_box), [updated_covxy, updated_covbox]
+            track.mean = self.combine_mean(track.xymean, track.whmean)
+            return track.mean, [track.xycov, track.whcov]
         else:
-            maps = self.all_maps[track.assigned]
-            meanxy, meanbox = self.split_mean(track.mean)
-            covxy, covbox = track.cov
-            updated_xy, updated_covxy = self.kf_xy.update(meanxy, covxy, xy, maps)
-            updated_box, updated_covbox = self.kf_box.update(meanbox, covbox, wh)
+
+            self.kf_xy.update(track, xy)
+            self.kf_box.update(track, wh)
             
-            return self.combine_mean(updated_xy, updated_box), [updated_covxy, updated_covbox]
+            track.mean = self.combine_mean(track.xymean, track.whmean) # this may not be necasasry if track.mean isn't being used perform next prediction step
+            return track.mean, [track.xycov, track.whcov] # this might lead to duplicate code for some trackers, but should function normally
     
     def define_traj_sr_maps(self):
         self.all_maps = {}

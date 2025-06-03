@@ -20,21 +20,27 @@ class SimpleKalmanFilterXY:
         self._std_weight_position = std_pos
         self._std_weight_velocity = std_vel
 
-    def initiate(self, measurement):
-        mean_pos = measurement
+    def initiate(self, track):
+        
+        xy = track.xywh[:2]
+        mean_pos = xy
         mean_vel = np.zeros_like(mean_pos)
         mean = np.r_[mean_pos, mean_vel]
 
-        scale = np.mean(measurement)  # rough proxy for noise scaling
+        scale = np.mean(xy)  # rough proxy for noise scaling
         std = [
             self._std_weight_position * scale for _ in range(self.dim)
         ] + [
             self._std_weight_velocity * scale for _ in range(self.dim)
         ]
         covariance = np.diag(np.square(std))
-        return mean, covariance
+        track.xymean = mean
+        track.xycov = covariance
 
-    def predict(self, mean, covariance):
+    def predict(self, track):
+        mean = track.xymean
+        covariance = track.xycov
+        
         scale = mean[0]  # position proxy
         std = [
             self._std_weight_position * scale for _ in range(self.dim)
@@ -44,9 +50,14 @@ class SimpleKalmanFilterXY:
         motion_cov = np.diag(np.square(std))
         mean = self._motion_mat @ mean
         covariance = self._motion_mat @ covariance @ self._motion_mat.T + motion_cov
-        return mean, covariance
+        
+        track.xymean = mean
+        track.xycov = covariance
 
-    def update(self, mean, covariance, measurement):
+    def update(self, track, measurement):
+        mean = track.xymean
+        covariance = track.xycov
+        
         projected_mean = self._update_mat @ mean
         projected_cov = self._update_mat @ covariance @ self._update_mat.T
 
@@ -63,7 +74,9 @@ class SimpleKalmanFilterXY:
         innovation = measurement - projected_mean
         new_mean = mean + kalman_gain @ innovation
         new_cov = covariance - kalman_gain @ projected_cov @ kalman_gain.T
-        return new_mean, new_cov
+        
+        track.xymean = new_mean
+        track.xycov = new_cov
     
 class SimpleKalmanFilterWH:
     def __init__(self, dim=2, std_pos=1. / 20, std_vel=1. / 160):
@@ -83,22 +96,27 @@ class SimpleKalmanFilterWH:
         self._std_weight_position = std_pos
         self._std_weight_velocity = std_vel
 
-    def initiate(self, measurement):
-        mean_pos = measurement
+    def initiate(self, track):
+        wh = track.xywh[2:4]
+        mean_pos = wh
         mean_vel = np.zeros_like(mean_pos)
         mean = np.r_[mean_pos, mean_vel]
 
-        scale = np.mean(measurement)  # rough proxy for noise scaling
+        scale = np.mean(wh)  # rough proxy for noise scaling
         std = [
             self._std_weight_position * scale for _ in range(self.dim)
         ] + [
             self._std_weight_velocity * scale for _ in range(self.dim)
         ]
         covariance = np.diag(np.square(std))
-        return mean, covariance
+        track.whmean = mean
+        track.whcov = covariance
 
-    def predict(self, mean, covariance):
-        scale = mean[0]  # position proxy
+    def predict(self, track):
+        mean = track.whmean
+        covariance = track.whcov
+        
+        scale = mean[0]  # position proxy - review this scaling factor, seems arbitrary and likely does not apply to wh prediction
         std = [
             self._std_weight_position * scale for _ in range(self.dim)
         ] + [
@@ -107,9 +125,14 @@ class SimpleKalmanFilterWH:
         motion_cov = np.diag(np.square(std))
         mean = self._motion_mat @ mean
         covariance = self._motion_mat @ covariance @ self._motion_mat.T + motion_cov
-        return mean, covariance
+        
+        track.whmean = mean
+        track.whcov = covariance
 
-    def update(self, mean, covariance, measurement):
+    def update(self, track, measurement):
+        mean = track.whmean
+        covariance = track.whcov
+        
         projected_mean = self._update_mat @ mean
         projected_cov = self._update_mat @ covariance @ self._update_mat.T
 
@@ -126,4 +149,6 @@ class SimpleKalmanFilterWH:
         innovation = measurement - projected_mean
         new_mean = mean + kalman_gain @ innovation
         new_cov = covariance - kalman_gain @ projected_cov @ kalman_gain.T
-        return new_mean, new_cov
+        
+        track.whmean = new_mean
+        track.whcov = new_cov

@@ -24,3 +24,19 @@ def is_within(xy, polygons):
         if polygon.contains(point):
             return polygon
     return None
+
+def get_obj_att(obj, att):
+    """
+    Retrieve the attribute value from an object.
+
+    Args:
+        obj: The object from which to retrieve the attribute.
+        att (str): The name of the attribute to retrieve.
+
+    Returns:
+        The value of the specified attribute, or None if the attribute does not exist.
+    """
+    if hasattr(obj, att):
+        return getattr(obj, att)
+    else:
+        raise AttributeError(f"Track object has no attribute '{att}'")

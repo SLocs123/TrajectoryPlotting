@@ -247,6 +247,7 @@ def create_expected_trajectories(polygons, filepath, DTW=False):
                 averaged_traj = average_DTW(items_list)
             else:
                 averaged_traj = average_similar_points(items_list, poly1, poly2, 150, show=False)
+                
             final_trajs = add_item(traj_dict, poly1, poly2, averaged_traj)
         count += 1
     return final_trajs

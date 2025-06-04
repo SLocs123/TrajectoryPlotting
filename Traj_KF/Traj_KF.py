@@ -1,8 +1,9 @@
-from .Utils.simple_kf import SimpleKalmanFilterXY, SimpleKalmanFilterWH
-from .Utils.multi_kf import MultiKalman
-from .Utils.transformations import traj_to_img_domain, img_to_traj_domain, create_traj_map
-from .Utils.utils import read_pkl, is_within
+from boxmot.motion.kalman_filters.Traj_KF.Utils.simple_kf import SimpleKalmanFilterXY, SimpleKalmanFilterWH
+from boxmot.motion.kalman_filters.Traj_KF.Utils.multi_kf import MultiKalman
+from boxmot.motion.kalman_filters.Traj_KF.Utils.transformations import traj_to_img_domain, img_to_traj_domain, create_traj_map
+from boxmot.motion.kalman_filters.Traj_KF.Utils.utils import read_pkl, is_within
 import numpy as np
+import time
 
 class Trajectory_Filter():
     def __init__(self, traj_dir):
@@ -23,21 +24,23 @@ class Trajectory_Filter():
         """
         self.polygon_set = read_pkl(traj_dir)
         self.polygons = self.polygon_set.pop('polygons')
-        self.kf_xy = SimpleKalmanFilterXY()
+
+        self.simple_kf_xy = SimpleKalmanFilterXY()
+        self.multi_kf_xy = MultiKalman()
         self.kf_box = SimpleKalmanFilterWH()
+
         self.define_traj_sr_maps()
         
     
     def initiate(self, track):
         """
-        Create track from unassociated measurement. initiate always in the image domain.
-        This method initializes the Kalman filter state for a track based on its xywh coordinates.
-        """        
-        self.kf_xy.initiate(track)
+        Always starts in image domain.
+        """
+        self.simple_kf_xy.initiate(track)
         self.kf_box.initiate(track)
-        
+
         track.mean = self.combine_mean(track.xymean, track.whmean)
-        # track.cov = [track.xycov, track.whcov]
+        return track.mean, [track.xycov, track.whcov]
         
     
     # def multi_initiate(self, track):
@@ -51,11 +54,11 @@ class Trajectory_Filter():
         """
         
         if track.assigned:
-            self.kf_xy.predict(track)
-            self.kf_box.predict(track)
+            self.multi_kf_xy.predict(track)
         else:   
-            self.kf_xy.predict(track)
-            self.kf_box.predict(track)
+            self.simple_kf_xy.predict(track)
+        
+        self.kf_box.predict(track)
             
         track.mean = self.combine_mean(track.xymean, track.whmean)
         return track.mean, [track.xycov, track.whcov]
@@ -83,33 +86,35 @@ class Trajectory_Filter():
 
     #     return combined_means, combined_covs
         
-    def update(self, track, xy, wh):
+    def update(self, track, xywh):
         """
         Update the states of the trajectory tracker, assign and correct tracks and create necassary maps
         Might need to update xywh everytime, need to look at typicaly track syntax
         """
+        xy = xywh[:2]
+        wh = xywh[2:4]
 
         if not track.assigned:
             track.assigned = is_within(xy, self.polygons)
-            
-            self.kf_xy.update(track, xy)
+
+            self.simple_kf_xy.update(track, xy)
             self.kf_box.update(track, wh)
-            
-            if track.assigned:
-                self.kf_xy = MultiKalman()
+
+            if track.assigned and track.assigned in self.all_maps:
                 track.maps = self.all_maps[track.assigned]
                 track.xywh = [*xy, *wh]
-                self.kf_xy.initiate(track)
+                self.multi_kf_xy.initiate(track)
+            else:
+                track.assigned = None  # Revert invalid assignment
 
-            track.mean = self.combine_mean(track.xymean, track.whmean)
-            return track.mean, [track.xycov, track.whcov]
         else:
-
-            self.kf_xy.update(track, xy)
+            self.multi_kf_xy.update(track, xy)
             self.kf_box.update(track, wh)
+
             
-            track.mean = self.combine_mean(track.xymean, track.whmean) # this may not be necasasry if track.mean isn't being used perform next prediction step
-            return track.mean, [track.xycov, track.whcov] # this might lead to duplicate code for some trackers, but should function normally
+        track.mean = self.combine_mean(track.xymean, track.whmean) # this may not be necasasry if track.mean isn't being used perform next prediction step
+        return track.mean, [track.xycov, track.whcov] # this might lead to duplicate code for some trackers, but should function normally
+        
     
     def define_traj_sr_maps(self):
         self.all_maps = {}
@@ -134,7 +139,7 @@ class Trajectory_Filter():
         """
         Combines xy and ah components into a single mean vector.
         """
-        return (xymean[:2] + whmean[:2], xymean[2:4] + whmean[2:4])
+        return np.array([xymean[0], xymean[1], whmean[0], whmean[1], xymean[2], xymean[3], whmean[2], whmean[3]])
         
         
         

@@ -5,10 +5,10 @@ from utils.polygon_utils import redraw_poly
 import time
 
 print("Imports completed.")
-video_path = 'assets/cam02.jpg'
-output_path = 'output/test.jpg'
-polygons_csv = 'assets/cam02_poly.csv'
-SCT_label = 'assets/cam02_SCT.txt'
+video_path = 'assets/cam04.jpg'
+output_path = 'output/cam04_similar_removed.jpg'
+polygons_csv = 'assets/cam04_poly_new.csv'
+SCT_label = 'assets/cam04_SCT_no108.txt'
 
 print('Reading polygons from CSV...')
 

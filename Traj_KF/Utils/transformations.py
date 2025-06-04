@@ -42,51 +42,120 @@ def img_to_traj_domain(position, map):
     
     return traj_disp, lat_disp
 
+# def traj_to_img_domain(position, map):
+#     """
+#     Converts a position from trajectory domain to image domain using a given mapping.
+
+#     Args:
+#         position (np.ndarray): The position in trajectory domain.
+#         map (np.ndarray): The mapping from trajectory domain to image domain.
+
+#     Returns:
+#         np.ndarray: The position in image domain.
+#     """
+#     lat_disp, traj_disp = position
+#     # Traverse through the map to find the two closest points based on trajectory distance
+#     for i in range(1, len(map)):
+#         first_point = map[i-1]
+#         second_point = map[i]
+        
+#         # Check if the trajectory distance falls between the two points
+#         if first_point[1] <= traj_disp <= second_point[1]:
+#             # Calculate the fraction of the distance within this segment
+#             frac = (traj_disp - first_point[1]) / (second_point[1] - first_point[1])
+            
+#             # Interpolate between the two points to get the base Cartesian coordinates
+#             x = first_point[0][0] + frac * (second_point[0][0] - first_point[0][0])
+#             y = first_point[0][1] + frac * (second_point[0][1] - first_point[0][1])
+
+#             # Now adjust for the lateral displacement (lat_disp)
+#             # Find the direction of the tangent (perpendicular) at the point on the trajectory
+#             line_vec = np.array(second_point[0]) - np.array(first_point[0])  # vector along the line
+#             line_length = np.linalg.norm(line_vec)
+#             if line_length == 0:
+#                 raise ValueError("The two trajectory points are the same, cannot compute direction.")
+
+#             # Normalize the vector to get the unit direction
+#             line_vec_normalized = line_vec / line_length
+
+#             # Find the unit perpendicular vector (rotating 90 degrees counterclockwise)
+#             perp_vec = np.array([-line_vec_normalized[1], line_vec_normalized[0]])
+
+#             # Adjust the point for lateral displacement
+#             x += lat_disp * perp_vec[0]
+#             y += lat_disp * perp_vec[1]
+            
+#             return x, y
+        
+#     raise ValueError("The trajectory distance is outside the bounds of the translation map.")
+
 def traj_to_img_domain(position, map):
     """
     Converts a position from trajectory domain to image domain using a given mapping.
-
+    Allows projection beyond the final segment of the trajectory.
+    
     Args:
-        position (np.ndarray): The position in trajectory domain.
-        map (np.ndarray): The mapping from trajectory domain to image domain.
+        position (np.ndarray): (lat_disp, traj_disp) position in trajectory domain.
+        map (list): List of (xy, traj_dist) tuples.
 
     Returns:
-        np.ndarray: The position in image domain.
+        np.ndarray: (x, y) position in image domain.
     """
     lat_disp, traj_disp = position
-    # Traverse through the map to find the two closest points based on trajectory distance
+
+    # Handle standard interpolation within the map
     for i in range(1, len(map)):
-        first_point = map[i-1]
+        first_point = map[i - 1]
         second_point = map[i]
-        
-        # Check if the trajectory distance falls between the two points
+
         if first_point[1] <= traj_disp <= second_point[1]:
-            # Calculate the fraction of the distance within this segment
+            # Interpolate between two points
             frac = (traj_disp - first_point[1]) / (second_point[1] - first_point[1])
-            
-            # Interpolate between the two points to get the base Cartesian coordinates
-            x = first_point[0][0] + frac * (second_point[0][0] - first_point[0][0])
-            y = first_point[0][1] + frac * (second_point[0][1] - first_point[0][1])
+            base_point = np.array(first_point[0]) + frac * (np.array(second_point[0]) - np.array(first_point[0]))
 
-            # Now adjust for the lateral displacement (lat_disp)
-            # Find the direction of the tangent (perpendicular) at the point on the trajectory
-            line_vec = np.array(second_point[0]) - np.array(first_point[0])  # vector along the line
-            line_length = np.linalg.norm(line_vec)
-            if line_length == 0:
-                raise ValueError("The two trajectory points are the same, cannot compute direction.")
+            # Compute direction vector and apply lateral displacement
+            line_vec = np.array(second_point[0]) - np.array(first_point[0])
+            perp_vec = np.array([-line_vec[1], line_vec[0]]) / np.linalg.norm(line_vec)
+            return (base_point + lat_disp * perp_vec).tolist()
 
-            # Normalize the vector to get the unit direction
-            line_vec_normalized = line_vec / line_length
+    # Handle extrapolation if traj_disp is beyond the final segment
+    if traj_disp > map[-1][1]:
+        first_point = map[-4]
+        second_point = map[-1]
 
-            # Find the unit perpendicular vector (rotating 90 degrees counterclockwise)
-            perp_vec = np.array([-line_vec_normalized[1], line_vec_normalized[0]])
+        # Direction and length of last segment
+        line_vec = np.array(second_point[0]) - np.array(first_point[0])
+        line_length = second_point[1] - first_point[1]
+        if line_length == 0:
+            raise ValueError("The final two trajectory points are the same, cannot extrapolate.")
 
-            # Adjust the point for lateral displacement
-            x += lat_disp * perp_vec[0]
-            y += lat_disp * perp_vec[1]
-            
-            return x, y
-        
+        line_vec_normalized = line_vec / line_length
+
+        # Project beyond the last point
+        extrap_disp = traj_disp - second_point[1]
+        base_point = np.array(second_point[0]) + extrap_disp * line_vec_normalized
+
+        # Lateral offset
+        perp_vec = np.array([-line_vec_normalized[1], line_vec_normalized[0]])
+        return (base_point + lat_disp * perp_vec).tolist()
+
+    # (Optional) Handle extrapolation before start — not requested, but symmetric
+    if traj_disp < map[0][1]:
+        second_point = map[1]
+        first_point = map[0]
+
+        line_vec = np.array(second_point[0]) - np.array(first_point[0])
+        line_length = second_point[1] - first_point[1]
+        if line_length == 0:
+            raise ValueError("The initial two trajectory points are the same, cannot extrapolate.")
+
+        line_vec_normalized = line_vec / line_length
+        extrap_disp = traj_disp - first_point[1]
+        base_point = np.array(first_point[0]) + extrap_disp * line_vec_normalized
+
+        perp_vec = np.array([-line_vec_normalized[1], line_vec_normalized[0]])
+        return (base_point + lat_disp * perp_vec).tolist()
+
     raise ValueError("The trajectory distance is outside the bounds of the translation map.")
 
 def create_traj_map(trajs):
@@ -105,7 +174,7 @@ def create_traj_map(trajs):
     for traj in trajs:
         current_map = []
         for i, point in enumerate(traj):
-            cartesian_point = (point[0][0], point[0][1])
+            cartesian_point = (point[0], point[1])
             if i == 0:
                 centre_point = 0
             else:

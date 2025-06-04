@@ -1,6 +1,6 @@
 from .simple_kf import SimpleKalmanFilterXY
 import numpy as np
-from Utils.transformations import img_to_traj_domain, traj_to_img_domain
+from boxmot.motion.kalman_filters.Traj_KF.Utils.transformations import img_to_traj_domain, traj_to_img_domain
 import scipy.linalg
 
 class MultiKalman:

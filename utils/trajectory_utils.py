@@ -213,6 +213,26 @@ def get_positions_at_distances(trajectory, input_distances):
     
     return results
 
+def remove_same_points(trajectory, threshold=1e-3):
+    """
+    Remove points from the trajectory that are closer than the given threshold.
+
+    Args:
+        trajectory: np.ndarray of shape (N, 2, 2) or similar.
+        threshold: Minimum allowed distance between consecutive points.
+
+    Returns:
+        np.ndarray: Filtered trajectory.
+    """
+    if len(trajectory) == 0:
+        return trajectory
+    filtered = [trajectory[0]]
+    for point in trajectory[1:]:
+        prev_point = filtered[-1]
+        dist = np.linalg.norm(point[0] - prev_point[0])
+        if dist > threshold:
+            filtered.append(point)
+    return np.array(filtered)
 
 def smooth_density_resample(trajectory, density_smoothing=15, xy_smoothing=1000, sr_smoothing=100):
     """
@@ -230,7 +250,8 @@ def smooth_density_resample(trajectory, density_smoothing=15, xy_smoothing=1000,
     
     smoothed_trajectory = resample_trajectory(trajectory, xy_smoothing, sr_smoothing)
     density_profile = calculate_smooth_density_profile(trajectory, density_smoothing)
-    final_trajectory = get_positions_at_distances(smoothed_trajectory, density_profile)
+    final_smoothed = get_positions_at_distances(smoothed_trajectory, density_profile)
+    final_trajectory = remove_same_points(final_smoothed)
     # print('--------------------------------------------------------------------------------------------------------------')
     # print(f"Smoothed Trajectories: {smoothed_trajectory}")
     # print(f"Density Profile: {density_profile}")
@@ -282,29 +303,32 @@ def get_mode_list_by_length_kde(list_of_lists, return_list=False):
     """
     Returns the index (and optionally the list) of the internal list
     whose length is closest to the KDE-estimated mode of all lengths.
-    
+
     Args:
         list_of_lists (list of list): Input data.
         return_list (bool): If True, return both index and the list.
-        
+
     Returns:
         int: Index of the internal list closest to mode.
         list (optional): The actual list at that index.
     """
-    
     if not list_of_lists:
         raise ValueError("Input list is empty.")
     elif len(list_of_lists) == 1:
-        return list_of_lists[0]
+        return list_of_lists[0] if return_list else 0
+
     lengths = np.array([len(lst) for lst in list_of_lists])
 
+    # Check for zero variance (i.e., all lengths are equal)
+    if np.all(lengths == lengths[0]):
+        return list_of_lists[0] if return_list else 0
+
+    # KDE estimation
     kde = gaussian_kde(lengths)
     xs = np.linspace(min(lengths) - 1, max(lengths) + 1, 500)
     ys = kde(xs)
 
     mode_estimate = xs[np.argmax(ys)]
-    
-    # Find index of internal list whose length is closest to the mode
     closest_index = int(np.argmin(np.abs(lengths - mode_estimate)))
 
     return list_of_lists[closest_index] if return_list else closest_index

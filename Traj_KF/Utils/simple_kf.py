@@ -21,7 +21,6 @@ class SimpleKalmanFilterXY:
         self._std_weight_velocity = std_vel
 
     def initiate(self, track):
-        
         xy = track.xywh[:2]
         mean_pos = xy
         mean_vel = np.zeros_like(mean_pos)
@@ -68,7 +67,7 @@ class SimpleKalmanFilterXY:
 
         chol, lower = scipy.linalg.cho_factor(projected_cov, lower=True)
         kalman_gain = scipy.linalg.cho_solve(
-            (chol, lower), covariance @ self._update_mat.T
+            (chol, lower), (covariance @ self._update_mat.T).T
         ).T
 
         innovation = measurement - projected_mean
@@ -143,8 +142,8 @@ class SimpleKalmanFilterWH:
 
         chol, lower = scipy.linalg.cho_factor(projected_cov, lower=True)
         kalman_gain = scipy.linalg.cho_solve(
-            (chol, lower), covariance @ self._update_mat.T
-        ).T
+            (chol, lower), (covariance @ self._update_mat.T).T
+        ).T     
 
         innovation = measurement - projected_mean
         new_mean = mean + kalman_gain @ innovation

@@ -1,4 +1,4 @@
-from .simple_kf import SimpleKalmanFilter
+from .simple_kf import SimpleKalmanFilterXY, SimpleKalmanFilterWH
         
 class DualKalman:
     def __init__(self, dim1=2, dim2=2):

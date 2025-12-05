@@ -1,11 +1,12 @@
-from .Utils.dual_kf import DualKalman
-from .Utils.multi_kf import MultiKalman
-from .Utils.transformations import traj_to_img_domain, img_to_traj_domain, create_traj_map
-from .Utils.utils import read_pkl, is_within
+from boxmot.motion.kalman_filters.Traj_KF.Utils.simple_kf import SimpleKalmanFilterXY, SimpleKalmanFilterWH
+from boxmot.motion.kalman_filters.Traj_KF.Utils.multi_kf import MultiKalman
+from boxmot.motion.kalman_filters.Traj_KF.Utils.transformations import traj_to_img_domain, img_to_traj_domain, create_traj_map
+from boxmot.motion.kalman_filters.Traj_KF.Utils.utils import read_pkl, is_within
 import numpy as np
+import time
 
 class Trajectory_Filter():
-    def __init__(self, traj_dir, position_xyah=[None, None], KF_Domain='traj' ) -> None:
+    def __init__(self, traj_dir):
         """
         Initializes the Traj_KF class.
 
@@ -23,49 +24,131 @@ class Trajectory_Filter():
         """
         self.polygon_set = read_pkl(traj_dir)
         self.polygons = self.polygon_set.pop('polygons')
-        self.assigned = None
-        self.domain = KF_Domain
-        self.kf = DualKalman()
-        self.kf.initiate(position_xyah[0], position_xyah[1]) 
 
+        self.simple_kf_xy = SimpleKalmanFilterXY()
+        self.multi_kf_xy = MultiKalman()
+        self.kf_box = SimpleKalmanFilterWH()
+
+        self.define_traj_sr_maps()
         
-    def update_traj_xy(self, xy, ah):
+    
+    def initiate(self, track):
+        """
+        Always starts in image domain.
+        """
+        self.simple_kf_xy.initiate(track)
+        self.kf_box.initiate(track)
+
+        track.mean = self.combine_mean(track.xymean, track.whmean)
+        return track.mean, [track.xycov, track.whcov]
+        
+    
+    # def multi_initiate(self, track):
+    #     """
+    #     Create track from unassociated measurements(vectorised).
+    #     """
+
+    def predict(self, track):
+        """
+        Run Kalman filter prediction step. look into handling multi----might just pass the track to handle below!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! -------------------------------- need to check if track is assigned, handle different domains
+        """
+        
+        if track.assigned:
+            self.multi_kf_xy.predict(track)
+        else:   
+            self.simple_kf_xy.predict(track)
+        
+        self.kf_box.predict(track)
+            
+        track.mean = self.combine_mean(track.xymean, track.whmean)
+        return track.mean, [track.xycov, track.whcov]
+    
+    # def multi_predict(self, tracks):
+    #     """
+    #     Vectorized Kalman filter prediction for multiple tracks.
+    #     """
+    #     means = np.array([track.mean for track in tracks])
+    #     covs = np.array([track.cov for track in tracks])
+
+    #     # Split means and covariances
+    #     meanxy = means[:, :2]
+    #     meanbox = means[:, 2:4]
+    #     covxy = np.array([cov[0] for cov in covs])
+    #     covbox = np.array([cov[1] for cov in covs])
+
+    #     # Vectorized prediction for xy and box
+    #     predicted_xy, predicted_covxy = self.kf_xy.multi_predict(meanxy, covxy)
+    #     predicted_box, predicted_covbox = self.kf_box.multi_predict(meanbox, covbox)
+
+    #     # Combine results
+    #     combined_means = np.hstack([predicted_xy, predicted_box])
+    #     combined_covs = np.array([[cx, cb] for cx, cb in zip(predicted_covxy, predicted_covbox)])
+
+    #     return combined_means, combined_covs
+        
+    def update(self, track, xywh):
         """
         Update the states of the trajectory tracker, assign and correct tracks and create necassary maps
+        Might need to update xywh everytime, need to look at typicaly track syntax
         """
+        xy = xywh[:2]
+        wh = xywh[2:4]
 
-        if not self.assigned:
-            self.assigned = is_within(xy, self.polygons)
-            
-            if not self.assigned:
-                self.kf.update(xy, ah)
-                return self.kf.predict() # need to find a way to predict motion before traj assignment, likely need aditional kf until assigned
-            self.define_traj_sr_map()
+        if not track.assigned:
+            track.assigned = is_within(xy, self.polygons)
 
-            self.kf.update(xy, ah)
-            xyah = self.kf.predict()
+            self.simple_kf_xy.update(track, xy)
+            self.kf_box.update(track, wh)
+
+            if track.assigned and track.assigned in self.all_maps:
+                track.maps = self.all_maps[track.assigned]
+                track.xywh = [*xy, *wh]
+                self.multi_kf_xy.initiate(track)
+            else:
+                track.assigned = None  # Revert invalid assignment
+
+        else:
+            self.multi_kf_xy.update(track, xy)
+            self.kf_box.update(track, wh)
+
             
-            dic = self.kf.get_state()
-            self.kf = MultiKalman(dic['box'])
-            self.kf.initiate(traj_measurements=[img_to_traj_domain(xy, map) for map in self.maps], box_measurement=ah)
-            return xyah
+        track.mean = self.combine_mean(track.xymean, track.whmean) # this may not be necasasry if track.mean isn't being used perform next prediction step
+        return track.mean, [track.xycov, track.whcov] # this might lead to duplicate code for some trackers, but should function normally
         
-        positions = []
-        for map in self.maps: # type: ignore
-            pos = img_to_traj_domain(xy, map)
-            positions.append(pos)
-        self.kf.update(positions, ah) # need to handle this correctly, multiple pos values
-        xyahs = self.kf.predict()
-
-        i, xyah = min(enumerate(xyahs), key=lambda item: item[1][0][1])
-        xy = traj_to_img_domain(xyah[0:2], self.maps[i])
-
-        return xy, xyah[2:4]
     
-    def define_traj_sr_map(self):
-        self.sr = []
-        self.trajectories = []
-        for internal_dict in self.polygon_set[self.assigned].values():
-            self.trajectories.append(np.array(internal_dict[:,0]))
-            self.sr.append(np.array(internal_dict[:,1]))
-        self.maps = create_traj_map(self.trajectories)
+    def define_traj_sr_maps(self):
+        self.all_maps = {}
+        for ext_key, internal_dict in self.polygon_set.items():
+            trajectories = []
+            for trajs in internal_dict.values():
+                trajectories.append(np.array(trajs[:, 0]))
+            self.all_maps[ext_key] = create_traj_map(trajectories)
+        
+    def split_mean(self, mean):
+        """
+        Splits the mean into xy and wh components.
+        For mean = [x, y, w, h, vx, vy, vw, vh]:
+          xy = [x, y, vx, vy]
+          wh = [w, h, vw, vh]
+        """
+        xy = [mean[0], mean[1], mean[4], mean[5]]
+        wh = [mean[2], mean[3], mean[6], mean[7]]
+        return xy, wh
+    
+    def combine_mean(self, xymean, whmean):
+        """
+        Combines xy and ah components into a single mean vector.
+        """
+        return np.array([xymean[0], xymean[1], whmean[0], whmean[1], xymean[2], xymean[3], whmean[2], whmean[3]])
+        
+        
+        
+#  functions:
+#  update - takes an associated detection and updates the Kalman filter state - during update stage, must check if assigned
+#  predict - returns the predicted state of the Kalman filter (using the whole track as input alows saving of states in the track itself, or could use the id to correspond to a local state)
+#   takes a track input
+#  multi_predict - returns the predicted states of the Kalman filter for multiple trajectories (vectorised)
+#    Takes a list of track objects as input
+#  reset - resets the Kalman filter state, used to switch domains
+# construct_xywh - contructs artificiatl xywh mean for use with standard syntax
+ 

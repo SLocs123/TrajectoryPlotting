@@ -5,8 +5,8 @@ from utils.polygon_utils import redraw_poly, draw_occlusion
 import time
 
 print("Imports completed.")
-video_path = 'assets/cam02.jpg'
-output_path = 'output/test.jpg'
+video_path = 'assets/cam04.jpg'
+output_path = 'output/cam04_occlusion_test.jpg'
 polygons_csv = 'assets/cam04_poly_new.csv'
 SCT_label = 'assets/cam04_SCT_no108.txt'
 

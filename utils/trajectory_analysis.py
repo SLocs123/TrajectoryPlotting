@@ -43,7 +43,7 @@ def find_linked_polygons(polys, trajs):
     return linked_polys
 
 # Function to average similar points
-def average_similar_points(items_list, poly1, poly2, width, show=True):
+def average_similar_points(items_list, poly1, poly2, width, show=False):
     all_points = []
     for item in items_list:
         all_points.extend(item)
@@ -122,14 +122,23 @@ def average_similar_points(items_list, poly1, poly2, width, show=True):
 
     return inted_trajectory
 
-def average_DTW(items_list):
-    all_points = []
-    for item in items_list:
-        all_points.extend(item)
-    all_points = np.array(all_points)
+def average_DTW(items_list, speed=False, occlusion=False):
+    # all_points = []
+    # for item in items_list:
+    #     all_points.extend(item)
+    # all_points = np.array(all_points)
     
     aligned_trajectories = align_trajectories(items_list)
-    averaged_trajectory = average_trajectories(aligned_trajectories)
+    
+    if speed:
+        # can use alligned trajectories to find average speed here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        pass
+    
+    averaged_trajectory = average_trajectories(aligned_trajectories) 
+    
+    if occlusion:
+        pass
+    
     return averaged_trajectory
     
 def align_trajectories(trajectories):
@@ -142,7 +151,7 @@ def align_trajectories(trajectories):
 
     # Use the first trajectory as the reference
     reference_trajectory = get_mode_list_by_length_kde(trajectories, return_list=True)
-    ref_xy = [point[0] for point in reference_trajectory]
+    ref_xy = [point[0] for point in reference_trajectory] # type: ignore
     ref_len = len(ref_xy)
 
     for traj in trajectories:
@@ -157,7 +166,7 @@ def align_trajectories(trajectories):
         # Replace any unfilled entries with NaNs
         for i in range(ref_len):
             if aligned_traj[i] is None:
-                aligned_traj[i] = np.full_like(reference_trajectory[0], np.nan)
+                aligned_traj[i] = np.full_like(reference_trajectory[0], np.nan) # type: ignore
 
         aligned_trajectories.append(np.array(aligned_traj))
     return aligned_trajectories
@@ -234,7 +243,7 @@ def create_vehicle_trajectories(label_file_path):
     return vehicle_trajectories
 
 # Function to create expected trajectories dictionary
-def create_expected_trajectories(polygons, filepath, DTW=False):
+def create_expected_trajectories(polygons, filepath, DTW=True):
     traj_dict = {}
     vehicle_trajectories = create_vehicle_trajectories(filepath)
     linked_polygons = find_linked_polygons(polygons, vehicle_trajectories)
@@ -246,7 +255,7 @@ def create_expected_trajectories(polygons, filepath, DTW=False):
             if DTW:
                 averaged_traj = average_DTW(items_list)
             else:
-                averaged_traj = average_similar_points(items_list, poly1, poly2, 150, show=False)
+                averaged_traj = average_similar_points(items_list, poly1, poly2, 150)
             final_trajs = add_item(traj_dict, poly1, poly2, averaged_traj)
         count += 1
     return final_trajs

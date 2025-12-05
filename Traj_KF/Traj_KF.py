@@ -1,9 +1,8 @@
 from boxmot.motion.kalman_filters.Traj_KF.Utils.simple_kf import SimpleKalmanFilterXY, SimpleKalmanFilterWH
 from boxmot.motion.kalman_filters.Traj_KF.Utils.multi_kf import MultiKalman
-from boxmot.motion.kalman_filters.Traj_KF.Utils.transformations import traj_to_img_domain, img_to_traj_domain, create_traj_map
-from boxmot.motion.kalman_filters.Traj_KF.Utils.utils import read_pkl, is_within
+from boxmot.motion.kalman_filters.Traj_KF.Utils.transformations import create_traj_map
+from boxmot.motion.kalman_filters.Traj_KF.Utils.utils import read_traj, is_within
 import numpy as np
-import time
 
 class Trajectory_Filter():
     def __init__(self, traj_dir):
@@ -22,7 +21,8 @@ class Trajectory_Filter():
             trajectories (NoneType): Placeholder for trajectory information.
             sr (NoneType): Placeholder for spatial reference or related data.
         """
-        self.polygon_set = read_pkl(traj_dir)
+
+        self.polygon_set = read_traj(traj_dir)
         self.polygons = self.polygon_set.pop('polygons')
 
         self.simple_kf_xy = SimpleKalmanFilterXY()

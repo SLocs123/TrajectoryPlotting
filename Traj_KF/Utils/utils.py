@@ -1,5 +1,3 @@
-from shapely.geometry import Point
-
 def read_pkl(traj_dir):
     import pickle
     with open(traj_dir, 'rb') as pkl_file:
@@ -35,7 +33,25 @@ def read_json(json_dir):
 
     return deserialized_data
 
+def read_traj(traj_dir):
+    """
+    Read trajectory data from a file, which can be in either JSON or pickle format.
+    
+    Args:
+        traj_dir (str): Path to the trajectory file.
+    
+    Returns:
+        dict: The loaded trajectory data.
+    """
+    if traj_dir.endswith('.json'):
+        return read_json(traj_dir)
+    elif traj_dir.endswith('.pkl'):
+        return read_pkl(traj_dir)
+    else:
+        raise ValueError("Unsupported file format. Use .json or .pkl.")
+
 def is_within(xy, polygons):
+    from shapely.geometry import Point
     """
     Determine if a given point lies within any of the provided polygons.
     
@@ -52,19 +68,3 @@ def is_within(xy, polygons):
         if polygon.contains(point):
             return polygon
     return None
-
-def get_obj_att(obj, att):
-    """
-    Retrieve the attribute value from an object.
-
-    Args:
-        obj: The object from which to retrieve the attribute.
-        att (str): The name of the attribute to retrieve.
-
-    Returns:
-        The value of the specified attribute, or None if the attribute does not exist.
-    """
-    if hasattr(obj, att):
-        return getattr(obj, att)
-    else:
-        raise AttributeError(f"Track object has no attribute '{att}'")

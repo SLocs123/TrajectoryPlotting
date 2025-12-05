@@ -7,6 +7,40 @@ from .drawing_utils import draw_polygons, draw_all_points
 from .trajectory_analysis import create_vehicle_trajectories
 
 def redraw_poly(polygons_csv, video_path, label_path):
+    """
+    Interactive polygon editor for existing polygons using OpenCV and Shapely.
+
+    This function loads an image and a set of pre-defined polygons from a CSV file,
+    displays trajectories on top of the image, and allows the user to interactively
+    edit existing polygons using the mouse.
+
+    Functionality:
+    - Displays the image with existing polygons overlaid.
+    - Clicking inside an existing polygon activates edit mode for that polygon.
+    - In edit mode, each click defines a new vertex for the polygon.
+    - Press ENTER to finalise and replace the polygon with the new shape.
+    - Press BACKSPACE to cancel editing.
+    - Zoom in/out using '+' and '-'.
+    - Click-drag to pan around the image.
+    - ESC closes the editing window.
+    - After exiting, the user is prompted to save changes to a new CSV file and
+      optionally review the result.
+
+    Parameters:
+        polygons_csv (str): Path to the CSV file containing polygon definitions.
+        video_path (str): Path to image or video frame used as background.
+        label_path (str): Path to detection labels used to display trajectories.
+
+    Returns:
+        tuple:
+            polygons (list[shapely.geometry.Polygon]): Updated polygons.
+            polygons_csv (str | None): Save path if saved, otherwise None.
+
+    Intended Use:
+        Editing and refining previously defined regions of interest
+        (lanes, zones, road boundaries, etc.) in traffic-scene analysis.
+    """
+    
     image = read_image_from_path(video_path)
     backup_image = image.copy()
     polygons = read_polygons_from_csv(polygons_csv)
@@ -131,6 +165,42 @@ def redraw_poly(polygons_csv, video_path, label_path):
 
 
 def draw_occlusion(video_path, label_path):
+    """
+    Interactive occlusion-region annotation tool with polygon creation and editing.
+
+    This function allows the user to draw and modify occlusion regions directly on
+    an image using the mouse. Polygons are created from user-defined points and are
+    stored as Shapely geometry objects.
+
+    Functionality:
+    - Displays the image and vehicle trajectories.
+    - User may create NEW occlusion polygons by clicking on empty space:
+        - Every 4 clicks automatically creates a new polygon.
+        - Alternatively, press ENTER to finalise a polygon with 3+ points.
+    - Clicking inside an existing polygon activates edit mode:
+        - Subsequent clicks define the new shape.
+        - Press ENTER to replace the polygon.
+    - BACKSPACE cancels current draw/edit action.
+    - '+' and '-' control zoom level.
+    - Click-drag pans the view.
+    - ESC exits the tool.
+    - After exiting, user may save polygons to CSV and review the overlays.
+
+    Parameters:
+        video_path (str): Path to image or video frame for background display.
+        label_path (str): Path to detection or trajectory file.
+
+    Returns:
+        tuple:
+            occlusion_polygons (list[shapely.geometry.Polygon]): All drawn polygons.
+            polygons_csv (str | None): Output CSV path if saved.
+
+    Intended Use:
+        Manually defining occlusion areas (trees, signs, buildings, walls, etc.)
+        that block cameras, enabling occlusion-aware tracking, filtering, or
+        visibility modelling in traffic analysis pipelines.
+    """
+    
     image = read_image_from_path(video_path)
     backup_image = image.copy()
     occlusion_polygons = []
@@ -139,22 +209,12 @@ def draw_occlusion(video_path, label_path):
     draw_all_points(image, Every_Point)
 
     editing_state = {
-        "index": None,
-        "new_coords": []
+        "index": None,       # index of polygon being edited, or None
+        "new_coords": []     # points for new polygon OR edited version
     }
 
     # Get screen resolution and compute initial zoom
     screen_res = (1280, 720)  # fallback
-    # try:
-    #     cv2.namedWindow("_temp", cv2.WINDOW_NORMAL)
-    #     cv2.setWindowProperty("_temp", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    #     dummy = np.zeros((100, 100, 3), dtype=np.uint8)
-    #     cv2.imshow("_temp", dummy)
-    #     cv2.waitKey(1)
-    #     screen_res = cv2.getWindowImageRect("_temp")[2:]
-    #     cv2.destroyWindow("_temp")
-    # except:
-    #     pass
 
     screen_width, screen_height = screen_res
     img_height, img_width = image.shape[:2]
@@ -165,13 +225,15 @@ def draw_occlusion(video_path, label_path):
     last_mouse_pos = (0, 0)
 
     def transform_point(x, y):
+        """Map display coords -> image coords."""
         return int((x - pan_x) / zoom), int((y - pan_y) / zoom)
 
     def inverse_transform_point(x, y):
+        """Map image coords -> display coords."""
         return int(x * zoom + pan_x), int(y * zoom + pan_y)
 
     def click_event(event, x, y, flags, param):
-        nonlocal dragging, last_mouse_pos
+        nonlocal dragging, last_mouse_pos, pan_x, pan_y, editing_state, occlusion_polygons
 
         if event == cv2.EVENT_LBUTTONDOWN:
             dragging = True
@@ -180,20 +242,41 @@ def draw_occlusion(video_path, label_path):
             x_img, y_img = transform_point(x, y)
             point = Point(x_img, y_img)
 
+            # If we're already editing a polygon, just add points to that
             if editing_state["index"] is not None:
                 editing_state["new_coords"].append((x_img, y_img))
+                print(f"[EDIT] Point {len(editing_state['new_coords'])} added: ({x_img}, {y_img})")
+                return
+
+            # Not editing: first see if we clicked *inside* an existing polygon
+            clicked_index = None
+            for idx, poly in enumerate(occlusion_polygons):
+                if poly.contains(point):
+                    clicked_index = idx
+                    break
+
+            if clicked_index is not None:
+                # Enter edit mode for this polygon
+                print(f"Polygon {clicked_index} clicked! Start redefining it.")
+                editing_state["index"] = clicked_index
+                editing_state["new_coords"] = []   # start fresh definition
             else:
-                for idx, poly in enumerate(occlusion_polygons):
-                    if poly.contains(point):
-                        print(f"Polygon {idx} clicked! Start redefining it.")
-                        editing_state["index"] = idx
-                        editing_state["new_coords"] = []
-                        break
+                # Start or continue a *new* polygon
+                editing_state["new_coords"].append((x_img, y_img))
+                print(f"[NEW] Point {len(editing_state['new_coords'])} added: ({x_img}, {y_img})")
+
+                # Auto-complete a new polygon every 4 points
+                if editing_state["index"] is None and len(editing_state["new_coords"]) == 4:
+                    poly = Polygon(editing_state["new_coords"])
+                    occlusion_polygons.append(poly)
+                    print(f"New occlusion polygon {len(occlusion_polygons) - 1} created with 4 points.")
+                    editing_state["new_coords"] = []
 
         elif event == cv2.EVENT_LBUTTONUP:
             dragging = False
 
         elif event == cv2.EVENT_MOUSEMOVE and dragging:
+            # Panning
             dx = x - last_mouse_pos[0]
             dy = y - last_mouse_pos[1]
             pan_x += dx
@@ -201,53 +284,81 @@ def draw_occlusion(video_path, label_path):
             last_mouse_pos = (x, y)
 
     cv2.namedWindow("Shapely occlusion drawer")
-    cv2.setMouseCallback("Shapely Polygon Editor", click_event)
+    cv2.setMouseCallback("Shapely occlusion drawer", click_event)
 
     while True:
         h, w = image.shape[:2]
         display_image = cv2.resize(image, (int(w * zoom), int(h * zoom)))
         display_image = display_image.copy()
 
-        # draw_polygons(display_image, [Polygon([inverse_transform_point(*pt) for pt in poly.exterior.coords]) for poly in polygons])
+        # Draw existing occlusion polygons
+        if occlusion_polygons:
+            draw_polygons(
+                display_image,
+                [
+                    Polygon(
+                        [inverse_transform_point(*pt) for pt in poly.exterior.coords]
+                    )
+                    for poly in occlusion_polygons
+                ],
+            )
 
+        # Draw current in-progress points (either editing or new polygon)
         if editing_state["new_coords"]:
             for pt in editing_state["new_coords"]:
                 px, py = inverse_transform_point(*pt)
                 cv2.circle(display_image, (px, py), 3, (255, 0, 0), -1)
 
-        cv2.imshow("Shapely Polygon Editor", display_image)
+        cv2.imshow("Shapely occlusion drawer", display_image)
         key = cv2.waitKey(1)
 
-        if key == 27:
+        if key == 27:  # ESC
             break
-        elif key == 13:
-            if editing_state["index"] is not None and len(editing_state["new_coords"]) >= 3:
-                occlusion_polygons[editing_state["index"]] = Polygon(editing_state["new_coords"])
-                print(f"Polygon {editing_state['index']} updated.")
+
+        elif key == 13:  # Enter: finalise current polygon
+            if len(editing_state["new_coords"]) >= 3:
+                if editing_state["index"] is not None:
+                    # Finish editing existing polygon
+                    occlusion_polygons[editing_state["index"]] = Polygon(editing_state["new_coords"])
+                    print(f"Polygon {editing_state['index']} updated.")
+                else:
+                    # Finish drawing a new polygon (non-4-point shapes)
+                    poly = Polygon(editing_state["new_coords"])
+                    occlusion_polygons.append(poly)
+                    print(f"New occlusion polygon {len(occlusion_polygons) - 1} created with {len(editing_state['new_coords'])} points.")
             else:
                 print("Not enough points to create a valid polygon.")
             editing_state["index"] = None
             editing_state["new_coords"] = []
-        elif key == 8:
-            print(f"Editing of polygon {editing_state['index']} cancelled.")
+
+        elif key == 8:  # Backspace: cancel current drawing/editing
+            if editing_state["index"] is not None:
+                print(f"Editing of polygon {editing_state['index']} cancelled.")
+            else:
+                print("New polygon drawing cancelled.")
             editing_state["index"] = None
             editing_state["new_coords"] = []
+
         elif key == ord('+') or key == ord('='):
             zoom *= 1.1
         elif key == ord('-'):
             zoom /= 1.1
 
     cv2.destroyAllWindows()
+
     yes = ['yes', 'y']
+    polygons_csv = None
+
     save_polys = input("Do you want to save the polygons? (y/n): ").strip().lower()
     if save_polys in yes:
         polygons_csv = input("Enter the path to save the polygons: ").strip()
         write_polygons_to_csv(occlusion_polygons, polygons_csv)
         print(f"Polygons saved to {polygons_csv}.")
-        review= input('Review Polygons? (y/n): ').strip().lower()
+        review = input('Review Polygons? (y/n): ').strip().lower()
         if review in yes:
             draw_polygons(backup_image, occlusion_polygons)
             cv2.imshow("Shapely Polygon Editor", backup_image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
+
     return occlusion_polygons, polygons_csv

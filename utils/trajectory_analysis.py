@@ -120,26 +120,25 @@ def average_similar_points(items_list, poly1, poly2, width, show=False):
             plt.savefig(f'trajectory_plot_Poly1_{poly1_points}_Poly2_{poly2_points}.png')
 
 
-    return inted_trajectory
+    return inted_trajectory, None
 
-def average_DTW(items_list, speed=False, occlusion=False):
-    # all_points = []
-    # for item in items_list:
-    #     all_points.extend(item)
-    # all_points = np.array(all_points)
-    
+def average_DTW(items_list, speed=False):
+    """
+    Averages multiple trajectories using Dynamic Time Warping (DTW) for alignment.
+    """
+   
     aligned_trajectories = align_trajectories(items_list)
+    # print(aligned_trajectories)
+    # raise Exception("Debugging stop")
     
     if speed:
-        # can use alligned trajectories to find average speed here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        pass
+        averaged_trajectory = average_trajectories(aligned_trajectories) 
+        traj_deltas = DTW_deltas(aligned_trajectories)
+    else:
+        averaged_trajectory = average_trajectories(aligned_trajectories) 
+        traj_deltas = None
     
-    averaged_trajectory = average_trajectories(aligned_trajectories) 
-    
-    if occlusion:
-        pass
-    
-    return averaged_trajectory
+    return averaged_trajectory, traj_deltas
     
 def align_trajectories(trajectories):
     """
@@ -184,6 +183,27 @@ def average_trajectories(aligned_trajectories):
     avg_traj_inted = smooth_density_resample(averaged_trajectory)
 
     return avg_traj_inted  
+
+def DTW_deltas(alligned_trajectories):
+    """
+    Calculates the average delta (difference) between consecutive points
+    in each aligned trajectory using DTW.
+    """
+    deltas_list = []
+    for traj in alligned_trajectories:
+        deltas = []
+        for i in range(1, len(traj)):
+            point1 = traj[i-1][0]
+            point2 = traj[i][0]
+            delta = np.linalg.norm(np.array(point2) - np.array(point1))
+            deltas.append(delta)
+        deltas_list.append(deltas)
+    
+    # Calculate average deltas across all trajectories
+    avg_deltas = np.nanmean(np.array(deltas_list), axis=0)
+    prepended_avg_deltas = np.r_[avg_deltas[0], avg_deltas]  # Prepend the first delta to match trajectory length
+    
+    return prepended_avg_deltas
 
 def create_vehicle_trajectories(label_file_path):
     """
@@ -243,7 +263,7 @@ def create_vehicle_trajectories(label_file_path):
     return vehicle_trajectories
 
 # Function to create expected trajectories dictionary
-def create_expected_trajectories(polygons, filepath, DTW=True):
+def create_expected_trajectories(polygons, filepath, DTW=True, occlusion_areas=None):
     traj_dict = {}
     vehicle_trajectories = create_vehicle_trajectories(filepath)
     linked_polygons = find_linked_polygons(polygons, vehicle_trajectories)
@@ -253,10 +273,19 @@ def create_expected_trajectories(polygons, filepath, DTW=True):
         print(f'Running average: {count}', end='\r')
         for poly2, items_list in inner_dict.items():
             if DTW:
-                averaged_traj = average_DTW(items_list)
+                averaged_traj, delta = average_DTW(items_list, speed=True)
             else:
-                averaged_traj = average_similar_points(items_list, poly1, poly2, 150, show=False)
-                
-            final_trajs = add_item(traj_dict, poly1, poly2, averaged_traj)
+                averaged_traj, delta = average_similar_points(items_list, poly1, poly2, 150, show=False)
+            
+            local_occlusion = []
+            if occlusion_areas is not None:
+                for occ_area in occlusion_areas:
+                    for point in averaged_traj:
+                        loc = point[0]
+                        within, _ = is_within(loc, [occ_area])
+                        if within:
+                            local_occlusion.append(occ_area)
+                         
+            final_trajs = add_item(traj_dict, poly1, poly2, averaged_traj, local_occlusion, delta)
         count += 1
     return final_trajs

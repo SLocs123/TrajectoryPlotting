@@ -1,6 +1,6 @@
 from shapely.geometry import Point, Polygon
 
-def add_item(nested_dict, key1, key2, item):
+def add_item(nested_dict, key1, key2, item, local_occ, deltas):
     """
     Adds an item to a nested dictionary structure.
 
@@ -13,9 +13,10 @@ def add_item(nested_dict, key1, key2, item):
     Returns:
         dict: Updated nested dictionary.
     """
+    
     if key1 not in nested_dict:
         nested_dict[key1] = {}
-    nested_dict[key1][key2] = item
+    nested_dict[key1][key2] = {'trajectory': item, 'local_occlusion': local_occ, 'deltas': deltas}
     return nested_dict
 
 def show_structure(nested_dict, indent=0):

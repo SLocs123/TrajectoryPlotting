@@ -97,7 +97,8 @@ def draw_trajectories(frame, expected_trajectories, coords=False, seperate_traje
         for out_index, (first_polygon_int, inner_dict) in enumerate(expected_trajectories.items()):
             color_index = (color_index + 1) % len(label_colors)
             color = label_colors[color_index]
-            for in_index, (final_polygon, trajectory) in enumerate(inner_dict.items()):
+            for in_index, (final_polygon, meta_dict) in enumerate(inner_dict.items()):
+                trajectory = meta_dict['trajectory']
                 img = frame.copy()
                 trajectory = trajectory[:, 0]
                 # Draw the trajectory points
@@ -114,7 +115,8 @@ def draw_trajectories(frame, expected_trajectories, coords=False, seperate_traje
             color_index = (color_index + 1) % len(label_colors)
             color = label_colors[color_index]
 
-            for in_index, (final_polygon, trajectory) in enumerate(inner_dict.items()):
+            for in_index, (final_polygon, meta_dict) in enumerate(inner_dict.items()):
+                trajectory = meta_dict['trajectory']
                 trajectory = trajectory[:, 0]
                 # Draw the trajectory points
                 for point in trajectory:

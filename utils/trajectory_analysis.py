@@ -13,6 +13,8 @@ from .io_utils import read_labels_from_txt, get_true_labels
 from .utils import add_item, get_next_element, is_within
 from .trajectory_utils import interpolate_trajectory, resample_trajectory, rotate_rectangle, smooth_trajectory, smooth_density_resample
 from .transform_label_json import transform_labelstudio_input, bbox_to_z
+from .cluster import TrajectoryClusterer
+import cv2
 
 
 def find_linked_polygons(polys, trajs):
@@ -268,28 +270,49 @@ def create_vehicle_trajectories(label_file_path):
 def create_expected_trajectories(polygons, filepath, DTW=True, occlusion_areas=None):
     traj_dict = {}
     vehicle_trajectories = create_vehicle_trajectories(filepath)
-    
-    # use clustering method here, grouping trajectories by similarity instead of zoning
 
     
-    count = 0
-    for poly1, inner_dict in linked_polygons.items():
-        print(f'Running average: {count}', end='\r')
-        for poly2, items_list in inner_dict.items():
-            if DTW:
-                averaged_traj, delta = average_DTW(items_list, speed=True)
-            else:
-                averaged_traj, delta = average_similar_points(items_list, poly1, poly2, 150, show=False)
+    # use clustering method here, grouping trajectories by similarity instead of zoning
+    clusterer = TrajectoryClusterer()
+    list_traj = list(vehicle_trajectories.values())
+    list_traj_converted = []
+
+    for traj in list_traj:
+        traj = np.array(traj)
+        traj = traj[:,0] # extract the (x,y) from the trajectory
+        list_traj_converted.append(traj)
+
+    clustered_trajs = clusterer.cluster_trajectories(list_traj_converted)
+    print(len(clustered_trajs))
+
+    img = cv2.imread('assets/cam04.jpg')
+    name = 1
+    for cluster in clustered_trajs: # type: ignore
+        image = img.copy()
+        for traj in cluster:
+            for point in traj:
+                cv2.circle(image, (int(point[0]), int(point[1])), 3, (0,0,155), -1)
+        cv2.imwrite(f'cluster: {name}.jpg', image)
+        name+=1 
+
+    # count = 0
+    # for poly1, inner_dict in linked_polygons.items():
+    #     print(f'Running average: {count}', end='\r')
+    #     for poly2, items_list in inner_dict.items():
+    #         if DTW:
+    #             averaged_traj, delta = average_DTW(items_list, speed=True)
+    #         else:
+    #             averaged_traj, delta = average_similar_points(items_list, poly1, poly2, 150, show=False)
             
-            local_occlusion = []
-            if occlusion_areas is not None:
-                for occ_area in occlusion_areas:
-                    for point in averaged_traj:
-                        loc = point[0]
-                        within, _ = is_within(loc, [occ_area])
-                        if within:
-                            local_occlusion.append(occ_area)
+    #         local_occlusion = []
+    #         if occlusion_areas is not None:
+    #             for occ_area in occlusion_areas:
+    #                 for point in averaged_traj:
+    #                     loc = point[0]
+    #                     within, _ = is_within(loc, [occ_area])
+    #                     if within:
+    #                         local_occlusion.append(occ_area)
                          
-            final_trajs = add_item(traj_dict, poly1, poly2, averaged_traj, local_occlusion, delta)
-        count += 1
-    return final_trajs
+    #         final_trajs = add_item(traj_dict, poly1, poly2, averaged_traj, local_occlusion, delta)
+    #     count += 1
+    # return final_trajs

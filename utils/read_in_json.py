@@ -53,4 +53,3 @@ def read_json(filename):
 
         restored[input_box] = restored_inner
     return restored
-

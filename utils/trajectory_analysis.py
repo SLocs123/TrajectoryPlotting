@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from shapely.geometry import Point, Polygon
 import shapely
-from fastdtw import fastdtw
+# from fastdtw import fastdtw
+import fastdtw
 from scipy.spatial.distance import euclidean
 from .trajectory_utils import get_mode_list_by_length_kde
 from .io_utils import read_labels_from_txt, get_true_labels
@@ -155,7 +156,8 @@ def align_trajectories(trajectories):
 
     for traj in trajectories:
         traj_xy = [point[0] for point in traj]
-        distance, path = fastdtw(ref_xy, traj_xy, dist=euclidean)
+
+        distance, path = fastdtw.fastdtw(ref_xy, traj_xy, dist=euclidean)
 
         aligned_traj = [None] * ref_len  # initialise with None or NaNs
 
@@ -266,7 +268,9 @@ def create_vehicle_trajectories(label_file_path):
 def create_expected_trajectories(polygons, filepath, DTW=True, occlusion_areas=None):
     traj_dict = {}
     vehicle_trajectories = create_vehicle_trajectories(filepath)
-    linked_polygons = find_linked_polygons(polygons, vehicle_trajectories)
+    
+    # use clustering method here, grouping trajectories by similarity instead of zoning
+
     
     count = 0
     for poly1, inner_dict in linked_polygons.items():

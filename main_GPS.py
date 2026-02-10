@@ -2,6 +2,7 @@ from utils.io_utils import read_polygons_from_csv, save_trajs
 from utils.trajectory_analysis import create_expected_trajectories
 from utils.drawing_utils import save_frame
 from utils.polygon_utils import redraw_poly, draw_occlusion
+from utils.trajectory_transform import transform_trajectory
 import time
 
 print("Imports completed.")
@@ -37,7 +38,9 @@ else:
 
 start = time.time()
 print('creating expected trajectories...')
-expected_trajectories = create_expected_trajectories(polygons, SCT_label, DTW=True, occlusion_areas=occlusion) # type: ignore # occlusion_areas=occlusion_areas
+expected_trajectories = create_expected_trajectories(polygons, SCT_label, DTW=True, occlusion_areas=occlusion) # occlusion_areas=occlusion_areas
+new_traj = transform_trajectory(expected_trajectories, 'cam04_fitted_cam.json')
+
 end = time.time()
 print(f'Expected trajectories created in {end - start:.2f} seconds.')
 print('Saving frame...')

@@ -292,7 +292,7 @@ def create_expected_trajectories(polygons, filepath, DTW=True, occlusion_areas=N
         for traj in cluster:
             for point in traj:
                 cv2.circle(image, (int(point[0]), int(point[1])), 3, (0,0,155), -1)
-        cv2.imwrite(f'cluster: {name}.jpg', image)
+        cv2.imwrite(f'cluster_{name}.jpg', image)
         name+=1 
 
     # count = 0

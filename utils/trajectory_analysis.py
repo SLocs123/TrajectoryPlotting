@@ -14,6 +14,7 @@ from .utils import add_item, get_next_element, is_within
 from .trajectory_utils import interpolate_trajectory, resample_trajectory, rotate_rectangle, smooth_trajectory, smooth_density_resample
 from .transform_label_json import transform_labelstudio_input, bbox_to_z
 from .cluster import TrajectoryClusterer
+from .filter_tracks import filter_broken_tracks
 import cv2
 
 
@@ -282,10 +283,30 @@ def create_expected_trajectories(polygons, filepath, DTW=True, occlusion_areas=N
         traj = traj[:,0] # extract the (x,y) from the trajectory
         list_traj_converted.append(traj)
 
-    clustered_trajs = clusterer.cluster_trajectories(list_traj_converted)
-    print(len(clustered_trajs))
+    valid_tracks, broken_tracks, short_tracks = filter_broken_tracks(list_traj_converted, (3840,2160), 20, 100)
+    clustered_trajs = clusterer.cluster_trajectories(valid_tracks)
+    # print(len(clustered_trajs))
 
     img = cv2.imread('assets/cam04.jpg')
+
+    valid_img = img.copy()
+    for track in valid_tracks:
+        for point in track:
+            cv2.circle(valid_img, (int(point[0]), int(point[1])), 3, (0,0,155), -1)
+    cv2.imwrite(f'valid_tracks.jpg', valid_img)
+
+    broken_img = img.copy()
+    for track in broken_tracks:
+        for point in track:
+            cv2.circle(broken_img, (int(point[0]), int(point[1])), 3, (0,0,155), -1)
+    cv2.imwrite(f'broken_tracks.jpg', broken_img)
+
+    short_img = img.copy()
+    for track in short_tracks:
+        for point in track:
+            cv2.circle(short_img, (int(point[0]), int(point[1])), 3, (0,0,155), -1)
+    cv2.imwrite(f'short_tracks.jpg', short_img)
+
     name = 1
     for cluster in clustered_trajs: # type: ignore
         image = img.copy()

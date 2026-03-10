@@ -54,6 +54,7 @@ def read_labels_from_txt(txt_path):
     with open(txt_path, 'r') as file:
         for line in file:
             parts = line.strip().split(' ')
+            print(parts)
             frame = int(parts[0])
             car_id = int(parts[1])
             x1 = float(parts[2])

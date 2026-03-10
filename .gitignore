@@ -1,5 +1,5 @@
 MCVT_YQ/
 figures/
 cluster*
-__pycache__
-utils/__pycache__
+_pycache_
+utils/_pycache_
